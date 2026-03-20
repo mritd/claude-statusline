@@ -50,6 +50,12 @@ func Parse(path string) (*Data, error) {
 	taskIDMap := make(map[string]int)
 	nextTaskID := 1
 
+	// Batch detection: 2+ consecutive TaskCreate calls indicate a new plan.
+	// Record the confirmed batch start so old todos can be trimmed after parsing.
+	var consecutiveCreates int
+	var pendingBatchStart int
+	confirmedBatchStart := -1
+
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
 
@@ -77,11 +83,31 @@ func Parse(path string) (*Data, error) {
 			block := &entry.Message.Content[i]
 			switch block.Type {
 			case "tool_use":
+				switch block.Name {
+				case "TaskCreate":
+					if consecutiveCreates == 0 {
+						pendingBatchStart = len(data.Todos)
+					}
+					consecutiveCreates++
+					if consecutiveCreates == 2 {
+						confirmedBatchStart = pendingBatchStart
+					}
+				case "TaskUpdate", "TodoWrite":
+					// Don't reset - these are part of task management
+				default:
+					consecutiveCreates = 0
+				}
 				handleToolUse(data, block, entry.Timestamp, toolMap, taskIDMap, &nextTaskID)
 			case "tool_result":
 				handleToolResult(data, block, entry.Timestamp, toolMap)
 			}
 		}
+	}
+
+	// If a confirmed batch (2+ consecutive creates) was found,
+	// discard all older todos that preceded it
+	if confirmedBatchStart > 0 {
+		data.Todos = data.Todos[confirmedBatchStart:]
 	}
 
 	return data, nil

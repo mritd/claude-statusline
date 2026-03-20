@@ -15,3 +15,7 @@ The binary uses Go stdlib only. No external modules. This ensures fast builds, <
 ## ADR-004: Bar Chars via Closure Injection
 
 `NewContextBar(filled, empty)` and `NewQuotaBar(filled, empty)` return closures that capture bar characters. No mutable package-level state in the render package. This is parallel-test safe and consistent with how other render functions (dim, color) are injected.
+
+## ADR-005: Todo Batch Detection via Consecutive TaskCreate
+
+Transcript JSONL accumulates all TaskCreate events across a session. When a new plan is created (2+ consecutive TaskCreate calls), old todos are discarded. Detection: track `consecutiveCreates` counter, confirm batch on 2nd consecutive create, record start index. Non-task tool calls reset the counter but don't clear the confirmed index. Single TaskCreate insertions (adding one task to existing plan) are preserved.
