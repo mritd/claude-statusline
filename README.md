@@ -4,6 +4,9 @@ A fast, secure, modular statusline for [Claude Code](https://docs.anthropic.com/
 
 Single Go binary. Zero external dependencies. Starts in <5ms.
 
+<img width="1088" height="147" alt="image" src="https://github.com/user-attachments/assets/f5c9d377-881d-4e0f-b097-480142331952" />
+
+
 ```
 Context ██░░░░░░░░ 21% | Usage ████░░░░░░ 37% (1h30m) | ██░░░░░░░░ 15% (4d16h) | ✓ All todos complete (17/17) | main*
 ```
