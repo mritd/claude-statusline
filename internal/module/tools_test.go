@@ -4,11 +4,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mritd/claude-statusline/internal/config"
 	"github.com/mritd/claude-statusline/internal/transcript"
 )
 
 func TestToolsVarsRunning(t *testing.T) {
 	ctx := &Context{
+		Config: config.Default(),
 		Transcript: &transcript.Data{
 			Tools: []transcript.ToolEntry{
 				{Name: "Edit", Target: "auth.ts", Status: "running", StartTime: time.Now()},
@@ -29,6 +31,7 @@ func TestToolsVarsRunning(t *testing.T) {
 
 func TestToolsVarsGrouped(t *testing.T) {
 	ctx := &Context{
+		Config: config.Default(),
 		Transcript: &transcript.Data{
 			Tools: []transcript.ToolEntry{
 				{Name: "Read", Status: "completed"},

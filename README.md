@@ -59,6 +59,14 @@ A default config is auto-generated on first run at `~/.claude/plugins/claude-sta
     "shade":      ["▓", "░"],
     "half":       ["▄", "▁"],
     "half-block": ["▌", "░"]
+  },
+  "icons": {
+    "running":   "≡",
+    "completed": "✓",
+    "error":     "✗",
+    "todo":      "▸",
+    "done":      "✓",
+    "dirty":     "*"
   }
 }
 ```
@@ -76,6 +84,28 @@ Change `bar_style` to switch presets, or add custom entries to `bar_styles`:
   }
 }
 ```
+
+### Icons
+
+Override any icon used in the statusline. Useful when certain Unicode characters don't align in your terminal font:
+
+```json
+{
+  "icons": {
+    "running": "▸",
+    "dirty": "●"
+  }
+}
+```
+
+| Key | Default | Used in |
+|-----|---------|---------|
+| `running` | `≡` | tools/agents: active tool or subagent |
+| `completed` | `✓` | tools/agents: finished items |
+| `error` | `✗` | tools: failed tool calls |
+| `todo` | `▸` | todos: in-progress/pending task |
+| `done` | `✓` | todos: all tasks complete |
+| `dirty` | `*` | git: uncommitted changes |
 
 ### Modules
 

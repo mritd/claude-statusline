@@ -3,11 +3,13 @@ package module
 import (
 	"testing"
 
+	"github.com/mritd/claude-statusline/internal/config"
 	"github.com/mritd/claude-statusline/internal/transcript"
 )
 
 func TestTodosVarsInProgress(t *testing.T) {
 	ctx := &Context{
+		Config: config.Default(),
 		Transcript: &transcript.Data{
 			Todos: []transcript.TodoItem{
 				{Content: "Fix auth bug", Status: "in_progress"},
@@ -29,6 +31,7 @@ func TestTodosVarsInProgress(t *testing.T) {
 
 func TestTodosVarsAllComplete(t *testing.T) {
 	ctx := &Context{
+		Config: config.Default(),
 		Transcript: &transcript.Data{
 			Todos: []transcript.TodoItem{
 				{Content: "A", Status: "completed"},

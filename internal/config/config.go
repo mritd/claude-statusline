@@ -15,6 +15,7 @@ type Config struct {
 	Newline   []string                   `json:"newline"`
 	BarStyle  string                     `json:"bar_style"`
 	BarStyles map[string][2]string       `json:"bar_styles"`
+	Icons     map[string]string          `json:"icons"`
 	Raw       map[string]json.RawMessage `json:"-"`
 }
 
@@ -39,12 +40,22 @@ var defaultBarStyles = map[string][2]string{
 	"half-block": {"▌", "░"},
 }
 
+var defaultIcons = map[string]string{
+	"running":   "≡",
+	"completed": "✓",
+	"error":     "✗",
+	"todo":      "▸",
+	"done":      "✓",
+	"dirty":     "*",
+}
+
 func Default() *Config {
 	return &Config{
 		Modules:   []string{"context", "usage", "todos", "git"},
 		Separator: " | ",
 		BarStyle:  "block",
 		BarStyles: defaultBarStyles,
+		Icons:     defaultIcons,
 		Raw:       make(map[string]json.RawMessage),
 	}
 }
@@ -91,9 +102,16 @@ func Load(path string) *Config {
 	if v, ok := raw["bar_styles"]; ok {
 		var custom map[string][2]string
 		if json.Unmarshal(v, &custom) == nil {
-			// Merge custom styles into defaults (custom wins on conflict)
 			for k, v := range custom {
 				cfg.BarStyles[k] = v
+			}
+		}
+	}
+	if v, ok := raw["icons"]; ok {
+		var custom map[string]string
+		if json.Unmarshal(v, &custom) == nil {
+			for k, v := range custom {
+				cfg.Icons[k] = v
 			}
 		}
 	}
@@ -108,6 +126,17 @@ func (c *Config) BarChars() (string, string) {
 		return pair[0], pair[1]
 	}
 	return "█", "░"
+}
+
+// Icon returns the icon for the given key, falling back to the provided default.
+func (c *Config) Icon(key string) string {
+	if v, ok := c.Icons[key]; ok {
+		return v
+	}
+	if v, ok := defaultIcons[key]; ok {
+		return v
+	}
+	return ""
 }
 
 func (c *Config) ModuleConfig(name string) ModuleConf {
@@ -138,6 +167,7 @@ func writeDefault(path string, cfg *Config) {
 		"separator":  cfg.Separator,
 		"bar_style":  cfg.BarStyle,
 		"bar_styles": cfg.BarStyles,
+		"icons":      cfg.Icons,
 	}
 
 	data, err := json.MarshalIndent(out, "", "  ")

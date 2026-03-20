@@ -19,3 +19,7 @@ The binary uses Go stdlib only. No external modules. This ensures fast builds, <
 ## ADR-005: Todo Batch Detection via Consecutive TaskCreate
 
 Transcript JSONL accumulates all TaskCreate events across a session. When a new plan is created (2+ consecutive TaskCreate calls), old todos are discarded. Detection: track `consecutiveCreates` counter, confirm batch on 2nd consecutive create, record start index. Non-task tool calls reset the counter but don't clear the confirmed index. Single TaskCreate insertions (adding one task to existing plan) are preserved.
+
+## ADR-006: Configurable Icons via `icons` Map
+
+All statusline icons (running, completed, error, todo, done, dirty) are configurable via `icons` map in config.json. Modules read icons through `ctx.Config.Icon(key)` instead of hardcoding. This allows users to fix terminal font alignment issues by swapping characters.

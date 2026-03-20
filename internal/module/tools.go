@@ -39,7 +39,7 @@ func (m *ToolsModule) Vars(ctx *Context) map[string]string {
 		start = 0
 	}
 	for _, t := range running[start:] {
-		s := "◐ " + t.Name
+		s := ctx.Config.Icon("running") + " " + t.Name
 		if t.Target != "" {
 			s += ": " + t.Target
 		}
@@ -60,9 +60,9 @@ func (m *ToolsModule) Vars(ctx *Context) map[string]string {
 			break
 		}
 		if groups[name] > 1 {
-			compParts = append(compParts, fmt.Sprintf("✓ %s ×%d", name, groups[name]))
+			compParts = append(compParts, fmt.Sprintf("%s %s ×%d", ctx.Config.Icon("completed"), name, groups[name]))
 		} else {
-			compParts = append(compParts, "✓ "+name)
+			compParts = append(compParts, ctx.Config.Icon("completed")+" "+name)
 		}
 	}
 

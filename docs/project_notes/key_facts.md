@@ -20,6 +20,11 @@
 - **Cache**: `~/.claude/plugins/claude-statusline/.usage-cache.json`
 - **Lock**: `~/.claude/plugins/claude-statusline/.usage-cache.lock`
 
+## Icons (default)
+
+- `running=≡`, `completed=✓`, `error=✗`, `todo=▸`, `done=✓`, `dirty=*`
+- Configurable via `icons` map in config.json
+
 ## Debug
 
 - **Enable**: `DEBUG=claude-statusline` or `DEBUG=*`

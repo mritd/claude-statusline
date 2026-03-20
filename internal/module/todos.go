@@ -63,11 +63,14 @@ func (m *TodosModule) Vars(ctx *Context) map[string]string {
 
 	var summary string
 	if completed == total {
-		summary = fmt.Sprintf("%s✓%s All todos complete %s(%s)%s", green, reset, dim, progress, reset)
+		doneIcon := ctx.Config.Icon("done")
+		summary = fmt.Sprintf("%s%s%s All todos complete %s(%s)%s", green, doneIcon, reset, dim, progress, reset)
 	} else if current != "" {
-		summary = fmt.Sprintf("%s▸%s %s %s(%s)%s", yellow, reset, current, dim, progress, reset)
+		todoIcon := ctx.Config.Icon("todo")
+		summary = fmt.Sprintf("%s%s%s %s %s(%s)%s", yellow, todoIcon, reset, current, dim, progress, reset)
 	} else {
-		summary = fmt.Sprintf("%s▸%s %s(%s)%s", yellow, reset, dim, progress, reset)
+		todoIcon := ctx.Config.Icon("todo")
+		summary = fmt.Sprintf("%s%s%s %s(%s)%s", yellow, todoIcon, reset, dim, progress, reset)
 	}
 
 	return map[string]string{

@@ -4,11 +4,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mritd/claude-statusline/internal/config"
 	"github.com/mritd/claude-statusline/internal/transcript"
 )
 
 func TestAgentsVars(t *testing.T) {
 	ctx := &Context{
+		Config: config.Default(),
 		Transcript: &transcript.Data{
 			Agents: []transcript.AgentEntry{
 				{Type: "explore", Model: "haiku", Description: "Finding auth code", Status: "running", StartTime: time.Now().Add(-65 * time.Second)},

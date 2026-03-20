@@ -34,7 +34,7 @@ func (m *AgentsModule) Vars(ctx *Context) map[string]string {
 			if len(desc) > 30 {
 				desc = desc[:30] + "..."
 			}
-			s := fmt.Sprintf("◐ %s", a.Type)
+			s := fmt.Sprintf("%s %s", ctx.Config.Icon("running"), a.Type)
 			if a.Model != "" {
 				s += fmt.Sprintf(" [%s]", a.Model)
 			}
@@ -45,7 +45,7 @@ func (m *AgentsModule) Vars(ctx *Context) map[string]string {
 			runParts = append(runParts, s)
 		case "completed":
 			elapsed := formatElapsed(a.EndTime.Sub(a.StartTime))
-			compParts = append(compParts, fmt.Sprintf("✓ %s (%s)", a.Type, elapsed))
+			compParts = append(compParts, fmt.Sprintf("%s %s (%s)", ctx.Config.Icon("completed"), a.Type, elapsed))
 		}
 	}
 

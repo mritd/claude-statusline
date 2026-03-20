@@ -91,7 +91,7 @@ func (m *GitModule) Vars(ctx *Context) map[string]string {
 		"behind": "",
 	}
 	if m.dirty {
-		vars["dirty"] = yellow + "*" + reset
+		vars["dirty"] = yellow + ctx.Config.Icon("dirty") + reset
 	}
 	if m.ahead > 0 {
 		vars["ahead"] = fmt.Sprintf("↑%d", m.ahead)
