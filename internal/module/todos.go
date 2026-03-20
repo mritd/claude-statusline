@@ -37,10 +37,11 @@ func (m *TodosModule) Vars(ctx *Context) map[string]string {
 			continue
 		}
 		c := t.Content
-		if len(c) > 50 {
-			c = c[:50] + "..."
+		if len([]rune(c)) > 50 {
+			c = string([]rune(c)[:50]) + "..."
 		}
-		if t.Status == "in_progress" && current == "" {
+		if t.Status == "in_progress" {
+			// Always take the LAST in_progress task (most recent)
 			current = c
 		} else if pending == "" {
 			pending = c

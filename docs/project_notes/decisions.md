@@ -18,7 +18,15 @@ The binary uses Go stdlib only. No external modules. This ensures fast builds, <
 
 ## ADR-005: Todo Batch Detection via Consecutive TaskCreate
 
-Transcript JSONL accumulates all TaskCreate events across a session. When a new plan is created (2+ consecutive TaskCreate calls), old todos are discarded. Detection: track `consecutiveCreates` counter, confirm batch on 2nd consecutive create, record start index. Non-task tool calls reset the counter but don't clear the confirmed index. Single TaskCreate insertions (adding one task to existing plan) are preserved.
+Transcript JSONL accumulates all TaskCreate events across a session. When a new plan is created (2+ consecutive TaskCreate calls), old todos are discarded. Detection: track `consecutiveCreates` counter, confirm batch on 2nd consecutive create, record start index. Both non-task tool calls AND TaskUpdate calls reset the counter (TaskUpdate signals the end of the create phase), but don't clear the confirmed index. Single TaskCreate insertions (adding one task to existing plan) are preserved.
+
+## ADR-007: Auto-Complete In-Progress Tasks on New In-Progress
+
+Claude Code often skips explicit `TaskUpdate(status=completed)` events in the transcript JSONL, even though its internal task UI shows tasks as completed. When a new task enters `in_progress`, all previously `in_progress` tasks are auto-completed. This heuristic bridges the gap between Claude Code's in-memory task state and the transcript JSONL record.
+
+## ADR-008: Filter Deleted Todos from Transcript
+
+Tasks marked as `deleted` via TaskUpdate are filtered out after parsing. This handles the pattern where Claude Code creates a brainstorming batch, deletes it, then creates the real implementation batch. Without filtering, deleted tasks inflate the total count and may appear as pending.
 
 ## ADR-006: Configurable Icons via `icons` Map
 

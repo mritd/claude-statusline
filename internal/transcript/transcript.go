@@ -92,8 +92,12 @@ func Parse(path string) (*Data, error) {
 					if consecutiveCreates == 2 {
 						confirmedBatchStart = pendingBatchStart
 					}
-				case "TaskUpdate", "TodoWrite":
-					// Don't reset - these are part of task management
+				case "TaskUpdate":
+					// TaskUpdate means create phase is over; reset so
+					// the next batch of TaskCreate is detected properly
+					consecutiveCreates = 0
+				case "TodoWrite":
+					// Don't reset - TodoWrite replaces all todos inline
 				default:
 					consecutiveCreates = 0
 				}
@@ -109,6 +113,15 @@ func Parse(path string) (*Data, error) {
 	if confirmedBatchStart > 0 {
 		data.Todos = data.Todos[confirmedBatchStart:]
 	}
+
+	// Filter out deleted todos
+	filtered := data.Todos[:0]
+	for _, t := range data.Todos {
+		if t.Status != "deleted" {
+			filtered = append(filtered, t)
+		}
+	}
+	data.Todos = filtered
 
 	return data, nil
 }
@@ -143,8 +156,19 @@ func handleToolUse(data *Data, block *contentBlock, ts time.Time, toolMap map[st
 		*nextTaskID++
 	case "TaskUpdate":
 		if idx, ok := taskIDMap[block.Input.TaskID]; ok && idx < len(data.Todos) {
+			st := normalizeStatus(block.Input.Status)
+			// When a new task goes in_progress, auto-complete any
+			// previously in_progress tasks (Claude often skips the
+			// explicit completed event)
+			if st == "in_progress" {
+				for i := range data.Todos {
+					if data.Todos[i].Status == "in_progress" {
+						data.Todos[i].Status = "completed"
+					}
+				}
+			}
 			if block.Input.Status != "" {
-				data.Todos[idx].Status = normalizeStatus(block.Input.Status)
+				data.Todos[idx].Status = st
 			}
 			if block.Input.Subject != "" {
 				data.Todos[idx].Content = block.Input.Subject

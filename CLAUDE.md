@@ -39,7 +39,7 @@ The binary is invoked by Claude Code's `statusLine` hook. It receives a JSON blo
 |--------|---------|-------------|-------------|
 | context | enabled | stdin JSON | Context window usage bar |
 | usage | enabled | Claude API + cache | 5h/7d API quota bars with caching |
-| todos | enabled | transcript JSONL | Todo progress from TaskCreate/Update |
+| todos | enabled | transcript JSONL | Todo progress from TaskCreate/Update; auto-completes stale in_progress, filters deleted |
 | git | enabled | git CLI | Branch, dirty, ahead/behind status |
 | tools | disabled | transcript JSONL | Active tool call tracking |
 | agents | disabled | transcript JSONL | Subagent status tracking |
