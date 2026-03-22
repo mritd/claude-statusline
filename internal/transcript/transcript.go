@@ -3,7 +3,7 @@ package transcript
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -17,8 +17,6 @@ const maxSessionTools = 6
 type Data struct {
 	Tools            []ToolEntry
 	Agents           []AgentEntry
-	Todos            []TodoItem
-	SessionStart     time.Time
 	SessionName      string
 	SessionToolNames []string // all unique tool names across entire session (never reset)
 }
@@ -33,11 +31,7 @@ type AgentEntry struct {
 	StartTime, EndTime                   time.Time
 }
 
-type TodoItem struct {
-	Content, Status string
-}
-
-func Parse(path string) (*Data, error) {
+func Parse(path string, maxTailBytes int64) (*Data, error) {
 	data := &Data{}
 	if path == "" {
 		return data, nil
@@ -50,28 +44,31 @@ func Parse(path string) (*Data, error) {
 	}
 	defer func() { _ = f.Close() }()
 
+	// Tail scan: skip to the last maxTailBytes of the file
+	if maxTailBytes > 0 {
+		if info, err := f.Stat(); err == nil && info.Size() > maxTailBytes {
+			debug.Log("transcript", "tail scan: file %d bytes, seeking to last %d", info.Size(), maxTailBytes)
+			_, _ = f.Seek(-maxTailBytes, io.SeekEnd)
+		}
+	}
+
 	toolMap := make(map[string]int)
 	sessionToolLast := make(map[string]time.Time) // last usage time per tool name
-	taskIDMap := make(map[string]int)
-	nextTaskID := 1
-
-	// Batch detection: 2+ consecutive TaskCreate calls indicate a new plan.
-	// Record the confirmed batch start so old todos can be trimmed after parsing.
-	var consecutiveCreates int
-	var pendingBatchStart int
-	confirmedBatchStart := -1
 
 	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+
+	// If we seeked into the middle of the file, the first line is likely
+	// partial (we landed mid-line). Discard it unconditionally -- even if
+	// we happen to be at byte 0 the first line is just a system entry.
+	if maxTailBytes > 0 {
+		scanner.Scan()
+	}
 
 	for scanner.Scan() {
 		var entry jsonEntry
 		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
 			continue
-		}
-
-		if !entry.Timestamp.IsZero() && data.SessionStart.IsZero() {
-			data.SessionStart = entry.Timestamp
 		}
 
 		if entry.Type == "custom-title" && entry.CustomTitle != "" {
@@ -109,25 +106,7 @@ func Parse(path string) (*Data, error) {
 			block := &msg.Content[i]
 			switch block.Type {
 			case "tool_use":
-				switch block.Name {
-				case "TaskCreate":
-					if consecutiveCreates == 0 {
-						pendingBatchStart = len(data.Todos)
-					}
-					consecutiveCreates++
-					if consecutiveCreates == 2 {
-						confirmedBatchStart = pendingBatchStart
-					}
-				case "TaskUpdate":
-					// TaskUpdate means create phase is over; reset so
-					// the next batch of TaskCreate is detected properly
-					consecutiveCreates = 0
-				case "TodoWrite":
-					// Don't reset - TodoWrite replaces all todos inline
-				default:
-					consecutiveCreates = 0
-				}
-				handleToolUse(data, block, entry.Timestamp, toolMap, taskIDMap, &nextTaskID)
+				handleToolUse(data, block, entry.Timestamp, toolMap)
 				if !managementTools[block.Name] {
 					sessionToolLast[block.Name] = entry.Timestamp
 				}
@@ -155,25 +134,10 @@ func Parse(path string) (*Data, error) {
 		data.SessionToolNames = data.SessionToolNames[:maxSessionTools]
 	}
 
-	// If a confirmed batch (2+ consecutive creates) was found,
-	// discard all older todos that preceded it
-	if confirmedBatchStart > 0 {
-		data.Todos = data.Todos[confirmedBatchStart:]
-	}
-
-	// Filter out deleted todos
-	filtered := data.Todos[:0]
-	for _, t := range data.Todos {
-		if t.Status != "deleted" {
-			filtered = append(filtered, t)
-		}
-	}
-	data.Todos = filtered
-
 	return data, nil
 }
 
-func handleToolUse(data *Data, block *contentBlock, ts time.Time, toolMap map[string]int, taskIDMap map[string]int, nextTaskID *int) {
+func handleToolUse(data *Data, block *contentBlock, ts time.Time, toolMap map[string]int) {
 	switch block.Name {
 	case "Task", "Agent":
 		data.Agents = append(data.Agents, AgentEntry{
@@ -184,43 +148,6 @@ func handleToolUse(data *Data, block *contentBlock, ts time.Time, toolMap map[st
 			Status:      "running",
 			StartTime:   ts,
 		})
-	case "TodoWrite":
-		data.Todos = data.Todos[:0]
-		for _, t := range block.Input.Todos {
-			data.Todos = append(data.Todos, TodoItem{Content: t.Content, Status: normalizeStatus(t.Status)})
-		}
-	case "TaskCreate":
-		content := block.Input.Subject
-		if content == "" {
-			content = block.Input.Description
-		}
-		data.Todos = append(data.Todos, TodoItem{Content: content, Status: "pending"})
-		id := block.Input.TaskID
-		if id == "" {
-			id = fmt.Sprintf("%d", *nextTaskID)
-		}
-		taskIDMap[id] = len(data.Todos) - 1
-		*nextTaskID++
-	case "TaskUpdate":
-		if idx, ok := taskIDMap[block.Input.TaskID]; ok && idx < len(data.Todos) {
-			st := normalizeStatus(block.Input.Status)
-			// When a new task goes in_progress, auto-complete any
-			// previously in_progress tasks (Claude often skips the
-			// explicit completed event)
-			if st == "in_progress" {
-				for i := range data.Todos {
-					if data.Todos[i].Status == "in_progress" {
-						data.Todos[i].Status = "completed"
-					}
-				}
-			}
-			if block.Input.Status != "" {
-				data.Todos[idx].Status = st
-			}
-			if block.Input.Subject != "" {
-				data.Todos[idx].Content = block.Input.Subject
-			}
-		}
 	default:
 		data.Tools = append(data.Tools, ToolEntry{
 			ID:        block.ID,
@@ -294,19 +221,6 @@ func truncatePath(p string, maxLen int) string {
 	return "..." + string(runes[len(runes)-maxLen+3:])
 }
 
-func normalizeStatus(s string) string {
-	switch strings.ToLower(s) {
-	case "pending", "not_started":
-		return "pending"
-	case "in_progress", "running":
-		return "in_progress"
-	case "completed", "complete", "done":
-		return "completed"
-	default:
-		return s
-	}
-}
-
 type jsonEntry struct {
 	Timestamp   time.Time        `json:"timestamp"`
 	Type        string           `json:"type"`
@@ -318,11 +232,8 @@ type jsonEntry struct {
 // managementTools are tool names handled by dedicated branches in handleToolUse
 // (not tracked as regular tools or in sessionToolLast).
 var managementTools = map[string]bool{
-	"TaskCreate": true,
-	"TaskUpdate": true,
-	"TodoWrite":  true,
-	"Task":       true,
-	"Agent":      true,
+	"Task":  true,
+	"Agent": true,
 }
 
 type jsonMessage struct {
@@ -339,20 +250,11 @@ type contentBlock struct {
 }
 
 type blockInput struct {
-	FilePath     string      `json:"file_path"`
-	Path         string      `json:"path"`
-	Pattern      string      `json:"pattern"`
-	Command      string      `json:"command"`
-	SubagentType string      `json:"subagent_type"`
-	Model        string      `json:"model"`
-	Description  string      `json:"description"`
-	Subject      string      `json:"subject"`
-	Status       string      `json:"status"`
-	TaskID       string      `json:"taskId"`
-	Todos        []todoInput `json:"todos"`
-}
-
-type todoInput struct {
-	Content string `json:"content"`
-	Status  string `json:"status"`
+	FilePath     string `json:"file_path"`
+	Path         string `json:"path"`
+	Pattern      string `json:"pattern"`
+	Command      string `json:"command"`
+	SubagentType string `json:"subagent_type"`
+	Model        string `json:"model"`
+	Description  string `json:"description"`
 }

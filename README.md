@@ -89,8 +89,6 @@ Override any icon used in the statusline:
 | `running` | `≡` | tools/agents: active tool or subagent |
 | `completed` | `✓` | tools: finished items |
 | `error` | `✗` | tools: failed tool calls |
-| `todo` | `▸` | todos: in-progress/pending task |
-| `done` | `✓` | todos: all tasks complete |
 | `dirty` | `*` | git: uncommitted changes |
 
 ### Modules
@@ -102,7 +100,6 @@ Override any icon used in the statusline:
 | `git` | enabled | Branch name + dirty indicator |
 | `tools` | enabled | Per-turn tool calls with session history |
 | `agents` | enabled | Subagent status (running/completed) |
-| `todos` | disabled | Task progress |
 | `project` | disabled | Model name + project path |
 | `environment` | enabled | CLAUDE.md/rules/MCP counts |
 
@@ -136,8 +133,6 @@ Each module supports a `format` override using `{var}` template syntax:
 
 **agents**: `{running}` `{completed}` `{summary}`
 
-**todos**: `{current}` `{progress}` `{summary}`
-
 **project**: `{model}` `{plan}` `{path}`
 
 **environment**: `{claude_md}` `{rules}` `{mcps}` `{hooks}`
@@ -160,6 +155,18 @@ Output:
 ≡ Review all uncommitted changes
 2 CLAUDE.md | 7 rules | 0 MCPs | 0 hooks
 ```
+
+### Transcript tail scan
+
+For long sessions, the JSONL transcript can grow large. The parser only reads the tail of the file by default:
+
+```json
+{
+  "max_tail_size": "10MB"
+}
+```
+
+Accepts human-readable sizes: `"512KB"`, `"10MB"`, `"1GB"`. Set to `"0"` for full scan.
 
 ### Cache tuning
 
@@ -232,8 +239,6 @@ Set to `0` to use the full context window size.
 | `✗` error tool | Red (icon only), dim text |
 | `≡` running agent | Cyan (entire line) |
 | `≡` error agent | Red (entire line) |
-| `▸` in-progress todo | Yellow |
-| `✓` all todos done | Green |
 | Git branch | Bold green |
 | Git dirty `*` | Yellow |
 | API errors `API 429*` | Yellow |

@@ -25,6 +25,13 @@
 - **Solution**: Auto-complete heuristic: when a new task enters `in_progress`, all previously `in_progress` tasks are auto-completed
 - **Prevention**: See ADR-007
 
+### 2026-03-22 - Transcript: large JSONL lines cause silent parse truncation
+
+- **Issue**: Agents/tools not detected when JSONL transcript contains lines >1MB (e.g., tool_result with large file content)
+- **Root Cause**: `bufio.Scanner` buffer max was 1MB; oversized lines cause `Scan()` to return false, silently stopping all further parsing
+- **Solution**: Increased max buffer from 1MB to 16MB (initial buffer kept small at 64KB for memory efficiency)
+- **Prevention**: Monitor for similar buffer-size assumptions in any streaming/line-based parser
+
 ### 2026-03-22 - Usage: empty parentheses when reset time unavailable
 
 - **Issue**: Status line shows `()` when usage reset time has passed or is unavailable

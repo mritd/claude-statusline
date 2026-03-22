@@ -45,6 +45,42 @@ func TestLoadPartialOverride(t *testing.T) {
 	}
 }
 
+func TestParseSize(t *testing.T) {
+	tests := []struct {
+		input string
+		want  int64
+	}{
+		{"10MB", 10 * 1024 * 1024},
+		{"10mb", 10 * 1024 * 1024},
+		{"512KB", 512 * 1024},
+		{"1GB", 1024 * 1024 * 1024},
+		{"1024", 1024},
+		{"0", 0},
+		{"", 0},
+		{"invalid", 0},
+		{"  5MB  ", 5 * 1024 * 1024},
+	}
+	for _, tt := range tests {
+		got := ParseSize(tt.input)
+		if got != tt.want {
+			t.Errorf("ParseSize(%q) = %d, want %d", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestMaxTailSizeConfig(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	_ = os.WriteFile(path, []byte(`{"max_tail_size":"50MB"}`), 0600)
+	cfg := Load(path)
+	if cfg.MaxTailSize != "50MB" {
+		t.Fatalf("expected 50MB, got %s", cfg.MaxTailSize)
+	}
+	if cfg.MaxTailBytes() != 50*1024*1024 {
+		t.Fatalf("expected %d bytes, got %d", 50*1024*1024, cfg.MaxTailBytes())
+	}
+}
+
 func TestModuleConfig(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")

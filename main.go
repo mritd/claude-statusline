@@ -24,9 +24,9 @@ func run() {
 	}
 
 	var td *transcript.Data
-	if cfg.IsEnabled("tools") || cfg.IsEnabled("agents") || cfg.IsEnabled("todos") {
+	if cfg.IsEnabled("tools") || cfg.IsEnabled("agents") {
 		if data.TranscriptPath != "" {
-			td, _ = transcript.Parse(data.TranscriptPath)
+			td, _ = transcript.Parse(data.TranscriptPath, cfg.MaxTailBytes())
 		}
 	}
 
@@ -74,7 +74,6 @@ func run() {
 	// Transcript modules
 	registry.Register(module.NewToolsModule())
 	registry.Register(module.NewAgentsModule())
-	registry.Register(module.NewTodosModule())
 
 	// Optional modules
 	registry.Register(module.NewProjectModule())

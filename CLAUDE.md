@@ -30,7 +30,7 @@ The binary is invoked by Claude Code's `statusLine` hook. It receives a JSON blo
 | config | Loads `~/.claude/plugins/claude-statusline/config.json`; auto-generates defaults on first run; provides per-module config and bar style resolution |
 | module | Pluggable module system. Each module implements `Module` interface (`Name`, `Collect`, `Vars`, `DefaultFormat`). Registry renders modules in config order |
 | render | Progress bar rendering via closure injection (`NewContextBar`/`NewQuotaBar`), format expansion (`{var}` substitution) |
-| transcript | Streams JSONL transcript file to extract active tools, subagents, and todos |
+| transcript | Streams JSONL transcript file (with tail scan) to extract active tools and subagents |
 | keychain | Platform-specific credential retrieval (macOS: `/usr/bin/security` CLI, other: `~/.claude/.credentials.json`) |
 | debug | Conditional stderr logging enabled by `DEBUG=claude-statusline` or `DEBUG=*` |
 
@@ -43,7 +43,6 @@ The binary is invoked by Claude Code's `statusLine` hook. It receives a JSON blo
 | git | enabled | git CLI | Branch, dirty, ahead/behind status |
 | tools | enabled | transcript JSONL | Per-turn tool calls with session history (top 6 by recency) |
 | agents | enabled | transcript JSONL | Subagent status tracking (latest 1 completed, running hides completed) |
-| todos | disabled | transcript JSONL | Todo progress from TaskCreate/Update; auto-completes stale in_progress, filters deleted |
 | project | disabled | stdin JSON | Model name and project path |
 | environment | enabled | filesystem | CLAUDE.md, rules, MCPs, hooks counts |
 

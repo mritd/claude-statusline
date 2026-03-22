@@ -37,3 +37,9 @@
 - **Status**: Completed
 - **Description**: Renamed `dot_warn_tokens` to `context_limit` (default 250k). Bar and dot now calculate percentage against this limit instead of full window. Exceeds limit caps at 100%. Removed dead `BRIGHT_YELLOW` and `LAVENDER` from ansi package. Default modules now include agents and environment.
 - **Notes**: See ADR-013
+
+### 2026-03-22 - Remove todos module and add tail scan
+
+- **Status**: Completed
+- **Description**: Removed todos module (Claude Code's own UI handles this; JSONL data unreliable). Added tail scan optimization: `max_tail_size` config (default `"10MB"`) makes transcript parser seek to file tail for large JSONL files. Fixed scanner buffer overflow (1MB -> 16MB max) that caused agents to not be detected after large tool_result entries. Removed `SessionStart` field.
+- **Notes**: See ADR-014, bugs.md scanner buffer entry

@@ -16,17 +16,9 @@ The binary uses Go stdlib only. No external modules. This ensures fast builds, <
 
 `NewContextBar(filled, empty)` and `NewQuotaBar(filled, empty)` return closures that capture bar characters. No mutable package-level state in the render package. This is parallel-test safe and consistent with how other render functions (dim, color) are injected.
 
-## ADR-005: Todo Batch Detection via Consecutive TaskCreate
+## ~~ADR-005/007/008: Todos Module~~ (Removed 2026-03-22)
 
-Transcript JSONL accumulates all TaskCreate events across a session. When a new plan is created (2+ consecutive TaskCreate calls), old todos are discarded. Detection: track `consecutiveCreates` counter, confirm batch on 2nd consecutive create, record start index. Both non-task tool calls AND TaskUpdate calls reset the counter (TaskUpdate signals the end of the create phase), but don't clear the confirmed index. Single TaskCreate insertions (adding one task to existing plan) are preserved.
-
-## ADR-007: Auto-Complete In-Progress Tasks on New In-Progress
-
-Claude Code often skips explicit `TaskUpdate(status=completed)` events in the transcript JSONL, even though its internal task UI shows tasks as completed. When a new task enters `in_progress`, all previously `in_progress` tasks are auto-completed. This heuristic bridges the gap between Claude Code's in-memory task state and the transcript JSONL record.
-
-## ADR-008: Filter Deleted Todos from Transcript
-
-Tasks marked as `deleted` via TaskUpdate are filtered out after parsing. This handles the pattern where Claude Code creates a brainstorming batch, deletes it, then creates the real implementation batch. Without filtering, deleted tasks inflate the total count and may appear as pending.
+Todos module removed. Claude Code's own task UI already displays todo progress, and TaskCreate/TaskUpdate events in JSONL are unreliable (model often skips completion events). The complexity of batch detection, auto-completion heuristics, and deleted-task filtering wasn't justified for data that was fundamentally incomplete.
 
 ## ADR-006: Configurable Icons via `icons` Map
 
@@ -46,7 +38,13 @@ Transcript JSONL entries use `json.RawMessage` for the `message` field. User mes
 
 ## ADR-012: Agent Tool Name "Agent" (2026-03-22)
 
-Claude Code uses both `"Task"` and `"Agent"` as tool names for subagent dispatch in transcript JSONL. The parser handles both via `case "Task", "Agent"`. A shared `managementTools` map excludes these (plus TaskCreate, TaskUpdate, TodoWrite) from regular tool tracking and session tool names.
+Claude Code uses both `"Task"` and `"Agent"` as tool names for subagent dispatch in transcript JSONL. The parser handles both via `case "Task", "Agent"`. A shared `managementTools` map excludes these from regular tool tracking and session tool names.
+
+## ADR-013: Context Limit Replaces Dot Warn Tokens (2026-03-22)
+
+## ADR-014: Tail Scan for Large JSONL Files (2026-03-22)
+
+JSONL transcript files grow unbounded (append-only, never truncated within a session). Long sessions with large tool_result entries can produce files of tens to hundreds of MB. Since no data item requires full session history (todos module removed), the parser seeks to the last `max_tail_size` bytes (default `"10MB"`, configurable as human-readable string like `"50MB"`, `"512KB"`). Set to `"0"` for full scan. `SessionStart` field removed as no module depended on it.
 
 ## ADR-013: Context Limit Replaces Dot Warn Tokens (2026-03-22)
 

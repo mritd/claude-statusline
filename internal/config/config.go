@@ -5,18 +5,21 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/mritd/claude-statusline/internal/debug"
 )
 
 type Config struct {
-	Modules   []string                   `json:"modules"`
-	Separator string                     `json:"separator"`
-	Newline   []string                   `json:"newline"`
-	BarStyle  string                     `json:"bar_style"`
-	BarStyles map[string][2]string       `json:"bar_styles"`
-	Icons     map[string]string          `json:"icons"`
-	Raw       map[string]json.RawMessage `json:"-"`
+	Modules     []string                   `json:"modules"`
+	Separator   string                     `json:"separator"`
+	Newline     []string                   `json:"newline"`
+	BarStyle    string                     `json:"bar_style"`
+	BarStyles   map[string][2]string       `json:"bar_styles"`
+	Icons       map[string]string          `json:"icons"`
+	MaxTailSize string                     `json:"max_tail_size"`
+	Raw         map[string]json.RawMessage `json:"-"`
 }
 
 type ModuleConf struct {
@@ -45,20 +48,21 @@ var defaultIcons = map[string]string{
 	"running":   "≡",
 	"completed": "✓",
 	"error":     "✗",
-	"todo":      "▸",
-	"done":      "✓",
 	"dirty":     "*",
 }
 
+const DefaultMaxTailSize = "10MB"
+
 func Default() *Config {
 	return &Config{
-		Modules:   []string{"context", "usage", "git", "tools", "agents", "environment"},
-		Separator: " | ",
-		Newline:   []string{"tools", "agents", "environment"},
-		BarStyle:  "diamond",
-		BarStyles: defaultBarStyles,
-		Icons:     defaultIcons,
-		Raw:       make(map[string]json.RawMessage),
+		Modules:     []string{"context", "usage", "git", "tools", "agents", "environment"},
+		Separator:   " | ",
+		Newline:     []string{"tools", "agents", "environment"},
+		BarStyle:    "diamond",
+		BarStyles:   defaultBarStyles,
+		Icons:       defaultIcons,
+		MaxTailSize: DefaultMaxTailSize,
+		Raw:         make(map[string]json.RawMessage),
 	}
 }
 
@@ -117,6 +121,12 @@ func Load(path string) *Config {
 			}
 		}
 	}
+	if v, ok := raw["max_tail_size"]; ok {
+		var s string
+		if json.Unmarshal(v, &s) == nil && s != "" {
+			cfg.MaxTailSize = s
+		}
+	}
 
 	cfg.Raw = raw
 	return cfg
@@ -139,6 +149,48 @@ func (c *Config) Icon(key string) string {
 		return v
 	}
 	return ""
+}
+
+// MaxTailBytes returns the parsed max_tail_size in bytes.
+// Returns 0 (full scan) on invalid input.
+func (c *Config) MaxTailBytes() int64 {
+	return ParseSize(c.MaxTailSize)
+}
+
+// ParseSize parses a human-readable size string like "10MB", "512KB", "1GB".
+// Pure numeric strings are treated as bytes. Returns 0 for empty or invalid input.
+func ParseSize(s string) int64 {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "0" {
+		return 0
+	}
+
+	upper := strings.ToUpper(s)
+	var suffix string
+	var multiplier int64
+	switch {
+	case strings.HasSuffix(upper, "GB"):
+		suffix = s[:len(s)-2]
+		multiplier = 1024 * 1024 * 1024
+	case strings.HasSuffix(upper, "MB"):
+		suffix = s[:len(s)-2]
+		multiplier = 1024 * 1024
+	case strings.HasSuffix(upper, "KB"):
+		suffix = s[:len(s)-2]
+		multiplier = 1024
+	default:
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil || n < 0 {
+			return 0
+		}
+		return n
+	}
+
+	n, err := strconv.ParseFloat(strings.TrimSpace(suffix), 64)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return int64(n * float64(multiplier))
 }
 
 func (c *Config) ModuleConfig(name string) ModuleConf {

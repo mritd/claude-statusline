@@ -25,16 +25,19 @@
 - **Bar style**: diamond (◆/◇)
 - **Modules**: context, usage, git, tools, agents, environment
 - **Newline**: tools, agents, environment (each starts on new line)
-- **Icons**: `running=≡`, `completed=✓`, `error=✗`, `todo=▸`, `done=✓`, `dirty=*`
+- **Icons**: `running=≡`, `completed=✓`, `error=✗`, `dirty=*`
 - **context_limit**: 250000 (bar/dot treat this as 100%; set to 0 for full window)
+- **max_tail_size**: `"10MB"` (human-readable; `"0"` for full scan; supports KB/MB/GB)
 - **Session tools limit**: 6 (most recently used, `maxSessionTools` constant)
 
 ## Transcript Parsing
 
+- Scanner buffer: 64KB initial, 16MB max (some JSONL lines can reach 3-4MB from large tool_result content)
 - JSONL entry `type` field: `user`, `assistant`, `progress`, `custom-title`, `agent-name`, etc.
 - User messages have `content` as string (not array) -- requires `json.RawMessage` deferred decode
 - Agent tool names: both `"Task"` and `"Agent"` map to agents module
-- `managementTools` set: TaskCreate, TaskUpdate, TodoWrite, Task, Agent (excluded from tool stats)
+- Tail scan: seeks to last `max_tail_size` bytes of file; discards first partial line after seek
+- `managementTools` set: Task, Agent (excluded from tool stats)
 - Tool stats reset on `type == "user"` entries; running tools preserved, completed/error cleared
 
 ## ANSI Colors
