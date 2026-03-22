@@ -45,11 +45,11 @@ func run() {
 
 	// Context module - BarFunc injected to avoid import cycle
 	mc := cfg.ModuleConfig("context")
-	dotWarnTokens := module.DefaultDotWarnTokens
-	if mc.DotWarnTokens != nil {
-		dotWarnTokens = *mc.DotWarnTokens
+	contextLimit := module.DefaultContextLimit
+	if mc.ContextLimit != nil {
+		contextLimit = *mc.ContextLimit
 	}
-	registry.Register(module.NewContextModule(mc.BarWidth, dotWarnTokens, contextBar))
+	registry.Register(module.NewContextModule(mc.BarWidth, contextLimit, contextBar))
 
 	// Usage module - QuotaBarFunc injected
 	uc := cfg.ModuleConfig("usage")

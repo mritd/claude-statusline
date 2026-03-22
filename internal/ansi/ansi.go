@@ -10,9 +10,7 @@ const (
 	BRIGHT_BLUE    = "\x1b[94m"
 	BRIGHT_MAGENTA = "\x1b[95m"
 	DIM            = "\x1b[2m"
-	BOLD           = "\x1b[1m"
-	LAVENDER       = "\x1b[38;5;146m"
-	BRIGHT_YELLOW  = "\x1b[93m"
+	BOLD = "\x1b[1m"
 )
 
 func Colored(color, text string) string {

@@ -9,7 +9,8 @@ Single Go binary. Zero external dependencies. Starts in <5ms.
 
 ```
 ● Context ◆◇◇◇◇◇◇◇◇◇ 14% | Usage ◆◇◇◇◇◇◇◇◇◇ 4% (2h 22m) | ◆◆◆◇◇◇◇◇◇◇ 31% (2d 14h) | main*
-✓ Agent ×21 | ✓ Write ×25 | ✓ Skill ×11 | ✓ ToolSearch ×10
+≡ Read: config.go | ✓ Bash ×5 | ✓ Edit ×3 | ✓ Read ×2 | ✓ Write ×0 | ✗ Bash ×1
+≡ Review all uncommitted changes
 ```
 
 ## Install
@@ -48,7 +49,7 @@ A default config is auto-generated on first run at `~/.claude/plugins/claude-sta
 
 ```json
 {
-  "modules": ["context", "usage", "git", "tools"],
+  "modules": ["context", "usage", "git", "tools", "agents", "environment"],
   "separator": " | "
 }
 ```
@@ -86,7 +87,7 @@ Override any icon used in the statusline:
 | Key | Default | Used in |
 |-----|---------|---------|
 | `running` | `≡` | tools/agents: active tool or subagent |
-| `completed` | `✓` | tools/agents: finished items |
+| `completed` | `✓` | tools: finished items |
 | `error` | `✗` | tools: failed tool calls |
 | `todo` | `▸` | todos: in-progress/pending task |
 | `done` | `✓` | todos: all tasks complete |
@@ -99,11 +100,11 @@ Override any icon used in the statusline:
 | `context` | enabled | Context window usage bar with status dot |
 | `usage` | enabled | 5h/7d API usage with reset times |
 | `git` | enabled | Branch name + dirty indicator |
-| `tools` | enabled | Active/completed tool calls |
+| `tools` | enabled | Per-turn tool calls with session history |
+| `agents` | enabled | Subagent status (running/completed) |
 | `todos` | disabled | Task progress |
-| `agents` | disabled | Subagent status |
 | `project` | disabled | Model name + project path |
-| `environment` | disabled | CLAUDE.md/rules/MCP counts |
+| `environment` | enabled | CLAUDE.md/rules/MCP counts |
 
 ### Custom formats
 
@@ -131,11 +132,11 @@ Each module supports a `format` override using `{var}` template syntax:
 
 **git**: `{branch}` `{dirty}` `{ahead}` `{behind}`
 
-**todos**: `{current}` `{progress}` `{summary}`
-
-**tools**: `{running}` `{completed}` `{summary}`
+**tools**: `{running}` `{completed}` `{errors}` `{summary}`
 
 **agents**: `{running}` `{completed}` `{summary}`
+
+**todos**: `{current}` `{progress}` `{summary}`
 
 **project**: `{model}` `{plan}` `{path}`
 
@@ -147,15 +148,17 @@ Use `newline` to break modules onto separate lines. Default: tools starts on a n
 
 ```json
 {
-  "modules": ["context", "usage", "git", "tools"],
-  "newline": ["tools"]
+  "modules": ["context", "usage", "git", "tools", "agents", "environment"],
+  "newline": ["tools", "agents", "environment"]
 }
 ```
 
 Output:
 ```
 ● Context ◆◇◇◇◇◇◇◇◇◇ 14% | Usage ◇◇◇◇◇◇◇◇◇◇ 4% (2h 22m) | ◆◆◆◇◇◇◇◇◇◇ 31% (2d 14h) | main*
-✓ Agent ×21 | ✓ Write ×25 | ✓ Skill ×11
+✓ Bash ×5 | ✓ Edit ×3 | ✓ Read ×0 | ✓ Grep ×0 | ✓ Write ×0 | ✓ Glob ×0
+≡ Review all uncommitted changes
+2 CLAUDE.md | 7 rules | 0 MCPs | 0 hooks
 ```
 
 ### Cache tuning
@@ -171,32 +174,48 @@ Usage module caches API responses. Configurable per-module:
 }
 ```
 
+## Tools module
+
+The tools module tracks tool calls per turn (resets on each user message). It maintains a session-wide list of the 6 most recently used tools, sorted by last usage time.
+
+- **Running**: shows tool name + target (file path or command), cyan
+- **Completed**: shows count (`✓ Read ×3`), green icon + dim text
+- **Error**: shows count (`✗ Bash ×1`), red icon + dim text
+- **Inactive**: tools used in previous turns but not the current one show as dimmed `×0`
+
+## Agents module
+
+The agents module tracks subagent (Agent tool) activity:
+
+- **Running**: full line in cyan, no elapsed time (`≡ Review all uncommitted changes`)
+- **Completed**: no color, shows elapsed time (`≡ Review all uncommitted changes (1m 58s)`)
+- **Error**: full line in red, shows elapsed time
+- Only the latest completed agent is shown; running agents hide completed ones
+- Display name: Description (50 chars) → Type → "Agent" fallback
+
 ## Colors
 
-### Status dot (●)
+### Context limit
 
-The dot before `Context` changes color based on token usage:
+By default, the context bar and dot treat 250k tokens as 100% instead of the full context window (e.g., 1M). This reflects that model performance degrades at high token counts. The dot color follows the bar color.
 
-| Condition | Color |
-|-----------|-------|
-| Normal | Green (matches context bar) |
-| Token usage >= 200k | Bright yellow (performance warning) |
-| Context >= 70% | Yellow (follows bar color) |
-| Context >= 85% | Red (follows bar color) |
-
-The 200k threshold warns that model performance may degrade at high token counts, even if the percentage is low (e.g., 20% of 1M context).
+| Percentage | Color |
+|------------|-------|
+| < 70% | Green |
+| 70-85% | Yellow |
+| >= 85% | Red |
 
 Configure or disable:
 
 ```json
 {
   "context": {
-    "dot_warn_tokens": 200000
+    "context_limit": 250000
   }
 }
 ```
 
-Set to `0` to disable the early warning (dot will only follow bar color).
+Set to `0` to use the full context window size.
 
 ### Bar colors
 
@@ -208,10 +227,13 @@ Set to `0` to disable the early warning (dot will only follow bar color).
 
 | Element | Color |
 |---------|-------|
-| `≡` (running tool/agent) | Cyan |
-| `✓` (completed tool/agent) | Green |
-| `▸` (in-progress todo) | Yellow |
-| `✓` (all todos done) | Green |
+| `≡` running tool | Cyan (icon + name + target) |
+| `✓` completed tool | Green (icon only), dim text |
+| `✗` error tool | Red (icon only), dim text |
+| `≡` running agent | Cyan (entire line) |
+| `≡` error agent | Red (entire line) |
+| `▸` in-progress todo | Yellow |
+| `✓` all todos done | Green |
 | Git branch | Bold green |
 | Git dirty `*` | Yellow |
 | API errors `API 429*` | Yellow |

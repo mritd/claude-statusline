@@ -5,18 +5,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/mritd/claude-statusline/internal/debug"
 )
 
+const maxSessionTools = 6
+
 type Data struct {
-	Tools        []ToolEntry
-	Agents       []AgentEntry
-	Todos        []TodoItem
-	SessionStart time.Time
-	SessionName  string
+	Tools            []ToolEntry
+	Agents           []AgentEntry
+	Todos            []TodoItem
+	SessionStart     time.Time
+	SessionName      string
+	SessionToolNames []string // all unique tool names across entire session (never reset)
 }
 
 type ToolEntry struct {
@@ -47,6 +51,7 @@ func Parse(path string) (*Data, error) {
 	defer func() { _ = f.Close() }()
 
 	toolMap := make(map[string]int)
+	sessionToolLast := make(map[string]time.Time) // last usage time per tool name
 	taskIDMap := make(map[string]int)
 	nextTaskID := 1
 
@@ -75,12 +80,33 @@ func Parse(path string) (*Data, error) {
 			data.SessionName = entry.Slug
 		}
 
-		if entry.Message == nil {
+		// Reset completed/error tools on each user message so stats
+		// reflect only the current turn.
+		if entry.Type == "user" {
+			var kept []ToolEntry
+			newMap := make(map[string]int)
+			for _, t := range data.Tools {
+				if t.Status == "running" {
+					newMap[t.ID] = len(kept)
+					kept = append(kept, t)
+				}
+			}
+			data.Tools = kept
+			toolMap = newMap
+		}
+
+		// Decode message content only when present (user messages have
+		// string content that would fail decoding to []contentBlock).
+		if entry.RawMessage == nil {
+			continue
+		}
+		var msg jsonMessage
+		if err := json.Unmarshal(*entry.RawMessage, &msg); err != nil {
 			continue
 		}
 
-		for i := range entry.Message.Content {
-			block := &entry.Message.Content[i]
+		for i := range msg.Content {
+			block := &msg.Content[i]
 			switch block.Type {
 			case "tool_use":
 				switch block.Name {
@@ -102,10 +128,31 @@ func Parse(path string) (*Data, error) {
 					consecutiveCreates = 0
 				}
 				handleToolUse(data, block, entry.Timestamp, toolMap, taskIDMap, &nextTaskID)
+				if !managementTools[block.Name] {
+					sessionToolLast[block.Name] = entry.Timestamp
+				}
 			case "tool_result":
 				handleToolResult(data, block, entry.Timestamp, toolMap)
 			}
 		}
+	}
+
+	// Build session tool names sorted by most recent usage, limited to 6.
+	for name := range sessionToolLast {
+		data.SessionToolNames = append(data.SessionToolNames, name)
+	}
+	slices.SortFunc(data.SessionToolNames, func(a, b string) int {
+		ta, tb := sessionToolLast[a], sessionToolLast[b]
+		if tb.Before(ta) {
+			return -1
+		}
+		if ta.Before(tb) {
+			return 1
+		}
+		return 0
+	})
+	if len(data.SessionToolNames) > maxSessionTools {
+		data.SessionToolNames = data.SessionToolNames[:maxSessionTools]
 	}
 
 	// If a confirmed batch (2+ consecutive creates) was found,
@@ -128,7 +175,7 @@ func Parse(path string) (*Data, error) {
 
 func handleToolUse(data *Data, block *contentBlock, ts time.Time, toolMap map[string]int, taskIDMap map[string]int, nextTaskID *int) {
 	switch block.Name {
-	case "Task":
+	case "Task", "Agent":
 		data.Agents = append(data.Agents, AgentEntry{
 			ID:          block.ID,
 			Type:        block.Input.SubagentType,
@@ -226,11 +273,15 @@ func extractTarget(block *contentBlock) string {
 		return truncatePath(block.Input.Pattern, 20)
 	}
 	if block.Input.Command != "" {
-		runes := []rune(block.Input.Command)
+		cmd := block.Input.Command
+		if i := strings.IndexAny(cmd, "\n\r"); i >= 0 {
+			cmd = cmd[:i]
+		}
+		runes := []rune(cmd)
 		if len(runes) > 30 {
 			return string(runes[:30]) + "..."
 		}
-		return block.Input.Command
+		return cmd
 	}
 	return ""
 }
@@ -257,11 +308,21 @@ func normalizeStatus(s string) string {
 }
 
 type jsonEntry struct {
-	Timestamp   time.Time    `json:"timestamp"`
-	Type        string       `json:"type"`
-	CustomTitle string       `json:"customTitle"`
-	Slug        string       `json:"slug"`
-	Message     *jsonMessage `json:"message"`
+	Timestamp   time.Time        `json:"timestamp"`
+	Type        string           `json:"type"`
+	CustomTitle string           `json:"customTitle"`
+	Slug        string           `json:"slug"`
+	RawMessage  *json.RawMessage `json:"message"`
+}
+
+// managementTools are tool names handled by dedicated branches in handleToolUse
+// (not tracked as regular tools or in sessionToolLast).
+var managementTools = map[string]bool{
+	"TaskCreate": true,
+	"TaskUpdate": true,
+	"TodoWrite":  true,
+	"Task":       true,
+	"Agent":      true,
 }
 
 type jsonMessage struct {

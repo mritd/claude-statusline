@@ -23,16 +23,25 @@
 ## Defaults
 
 - **Bar style**: diamond (◆/◇)
-- **Modules**: context, usage, git, tools
-- **Newline**: tools (starts on new line)
+- **Modules**: context, usage, git, tools, agents, environment
+- **Newline**: tools, agents, environment (each starts on new line)
 - **Icons**: `running=≡`, `completed=✓`, `error=✗`, `todo=▸`, `done=✓`, `dirty=*`
-- **dot_warn_tokens**: 200000 (set to 0 to disable)
+- **context_limit**: 250000 (bar/dot treat this as 100%; set to 0 for full window)
+- **Session tools limit**: 6 (most recently used, `maxSessionTools` constant)
+
+## Transcript Parsing
+
+- JSONL entry `type` field: `user`, `assistant`, `progress`, `custom-title`, `agent-name`, etc.
+- User messages have `content` as string (not array) -- requires `json.RawMessage` deferred decode
+- Agent tool names: both `"Task"` and `"Agent"` map to agents module
+- `managementTools` set: TaskCreate, TaskUpdate, TodoWrite, Task, Agent (excluded from tool stats)
+- Tool stats reset on `type == "user"` entries; running tools preserved, completed/error cleared
 
 ## ANSI Colors
 
 - Colors live in `internal/ansi/ansi.go` (separate package to avoid render↔module import cycle)
 - Icon colors only; module text colors stay in their respective Vars() methods
-- `●` dot follows ContextColor (green/yellow/red) with bright yellow override at dot_warn_tokens threshold
+- `●` dot follows ContextColor (green/yellow/red), same as bar color
 
 ## Debug
 

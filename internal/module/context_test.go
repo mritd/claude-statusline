@@ -24,11 +24,12 @@ func testBarFn(pct, width int) string {
 func TestContextVars(t *testing.T) {
 	data := &stdin.Data{
 		ContextWindow: stdin.ContextWindow{
-			Size:         200000,
-			CurrentUsage: &stdin.TokenUsage{InputTokens: 90000},
+			Size:         200_000,
+			CurrentUsage: &stdin.TokenUsage{InputTokens: 90_000},
 		},
 	}
-	m := NewContextModule(10, DefaultDotWarnTokens, testBarFn)
+	// context_limit=0 means use full window size (200k)
+	m := NewContextModule(10, 0, testBarFn)
 	ctx := &Context{Stdin: data}
 	_ = m.Collect(ctx)
 	vars := m.Vars(ctx)
@@ -58,7 +59,8 @@ func TestContextVarsCritical(t *testing.T) {
 			},
 		},
 	}
-	m := NewContextModule(10, DefaultDotWarnTokens, testBarFn)
+	// context_limit=0 means use full window (200k)
+	m := NewContextModule(10, 0, testBarFn)
 	ctx := &Context{Stdin: data}
 	_ = m.Collect(ctx)
 	vars := m.Vars(ctx)
@@ -71,36 +73,60 @@ func TestContextVarsCritical(t *testing.T) {
 	}
 }
 
-func TestDotWarnTokens(t *testing.T) {
-	// 200k tokens in 1M window = 20%, green zone but exceeds warn threshold
+func TestContextLimit(t *testing.T) {
 	data := &stdin.Data{
 		ContextWindow: stdin.ContextWindow{
 			Size:         1_000_000,
-			CurrentUsage: &stdin.TokenUsage{InputTokens: 200_000},
+			CurrentUsage: &stdin.TokenUsage{InputTokens: 150_000},
 		},
 	}
-	m := NewContextModule(10, DefaultDotWarnTokens, testBarFn)
+
+	// context_limit=300k, usage=150k -> 50%
+	m := NewContextModule(10, 300_000, testBarFn)
 	ctx := &Context{Stdin: data}
 	_ = m.Collect(ctx)
 	vars := m.Vars(ctx)
 
-	if !strings.Contains(vars["dot"], ansi.BRIGHT_YELLOW) {
-		t.Fatalf("dot should be bright yellow at 200k tokens, got %q", vars["dot"])
+	if vars["percent"] != "50%" {
+		t.Fatalf("expected 50%%, got %s", vars["percent"])
+	}
+	if vars["remaining"] != "150k" {
+		t.Fatalf("expected remaining 150k, got %s", vars["remaining"])
+	}
+	// 50% -> green dot
+	if !strings.Contains(vars["dot"], ansi.GREEN) {
+		t.Fatalf("dot should be green at 50%%, got %q", vars["dot"])
 	}
 
-	// 100k tokens — below threshold, should be green
-	data.ContextWindow.CurrentUsage.InputTokens = 100_000
+	// usage=250k -> 83%, yellow zone
+	data.ContextWindow.CurrentUsage.InputTokens = 250_000
 	vars = m.Vars(ctx)
-	if !strings.Contains(vars["dot"], ansi.GREEN) {
-		t.Fatalf("dot should be green below threshold, got %q", vars["dot"])
+	if vars["percent"] != "83%" {
+		t.Fatalf("expected 83%%, got %s", vars["percent"])
+	}
+	if !strings.Contains(vars["dot"], ansi.YELLOW) {
+		t.Fatalf("dot should be yellow at 83%%, got %q", vars["dot"])
 	}
 
-	// dot_warn_tokens=0 disables the feature
+	// usage=400k -> exceeds limit, cap at 100%
+	data.ContextWindow.CurrentUsage.InputTokens = 400_000
+	vars = m.Vars(ctx)
+	if vars["percent"] != "100%" {
+		t.Fatalf("expected 100%% (capped), got %s", vars["percent"])
+	}
+	if !strings.Contains(vars["dot"], ansi.RED) {
+		t.Fatalf("dot should be red at 100%%, got %q", vars["dot"])
+	}
+	if vars["remaining"] != "0" {
+		t.Fatalf("remaining should be 0 when over limit, got %s", vars["remaining"])
+	}
+
+	// context_limit=0 disables, falls back to full window
 	m2 := NewContextModule(10, 0, testBarFn)
-	data.ContextWindow.CurrentUsage.InputTokens = 200_000
+	data.ContextWindow.CurrentUsage.InputTokens = 150_000
 	vars = m2.Vars(ctx)
-	if !strings.Contains(vars["dot"], ansi.GREEN) {
-		t.Fatalf("dot should be green when warn disabled, got %q", vars["dot"])
+	if vars["percent"] != "15%" {
+		t.Fatalf("expected 15%% with no limit, got %s", vars["percent"])
 	}
 }
 

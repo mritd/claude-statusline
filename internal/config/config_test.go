@@ -8,10 +8,10 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := Default()
-	if len(cfg.Modules) != 4 {
-		t.Fatalf("expected 4 default modules, got %d", len(cfg.Modules))
+	if len(cfg.Modules) != 6 {
+		t.Fatalf("expected 6 default modules, got %d", len(cfg.Modules))
 	}
-	expected := []string{"context", "usage", "git", "tools"}
+	expected := []string{"context", "usage", "git", "tools", "agents", "environment"}
 	for i, e := range expected {
 		if cfg.Modules[i] != e {
 			t.Fatalf("unexpected default modules: %v", cfg.Modules)
@@ -24,7 +24,7 @@ func TestDefaultConfig(t *testing.T) {
 
 func TestLoadMissingFile(t *testing.T) {
 	cfg := Load("/nonexistent/path/config.json")
-	if len(cfg.Modules) != 4 {
+	if len(cfg.Modules) != 6 {
 		t.Fatalf("missing file should return defaults, got %d modules", len(cfg.Modules))
 	}
 }

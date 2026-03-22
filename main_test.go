@@ -37,8 +37,8 @@ func TestMainIntegration(t *testing.T) {
 	if !strings.Contains(output, "◆") {
 		t.Fatalf("expected bar chars in output, got: %q", output)
 	}
-	if !strings.Contains(output, "50%") {
-		t.Fatalf("expected 50%% in output, got: %q", output)
+	if !strings.Contains(output, "40%") {
+		t.Fatalf("expected 40%% in output, got: %q", output)
 	}
 }
 

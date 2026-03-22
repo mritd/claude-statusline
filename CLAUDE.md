@@ -41,11 +41,11 @@ The binary is invoked by Claude Code's `statusLine` hook. It receives a JSON blo
 | context | enabled | stdin JSON | Context window usage bar with status dot |
 | usage | enabled | Claude API + cache | 5h/7d API quota bars with caching |
 | git | enabled | git CLI | Branch, dirty, ahead/behind status |
-| tools | enabled | transcript JSONL | Active/completed tool call tracking |
+| tools | enabled | transcript JSONL | Per-turn tool calls with session history (top 6 by recency) |
+| agents | enabled | transcript JSONL | Subagent status tracking (latest 1 completed, running hides completed) |
 | todos | disabled | transcript JSONL | Todo progress from TaskCreate/Update; auto-completes stale in_progress, filters deleted |
-| agents | disabled | transcript JSONL | Subagent status tracking |
 | project | disabled | stdin JSON | Model name and project path |
-| environment | disabled | filesystem | CLAUDE.md, rules, MCPs, hooks counts |
+| environment | enabled | filesystem | CLAUDE.md, rules, MCPs, hooks counts |
 
 ### Design Principles
 

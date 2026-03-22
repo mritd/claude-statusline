@@ -35,3 +35,19 @@ All statusline icons (running, completed, error, todo, done, dirty) are configur
 ## ADR-009: ANSI Colors in Separate Package (2026-03-22)
 
 Color constants, helpers (`Colored`, `Dim`, `Yellow`), and color threshold functions (`ContextColor`, `QuotaColor`) live in `internal/ansi/`. This breaks the render↔module import cycle: modules need colors for icon styling, render needs module types for orchestration. The render package no longer owns color logic; it imports ansi for bar rendering only.
+
+## ADR-010: Per-Turn Tool Stats Reset (2026-03-22)
+
+Tool statistics reset on each user message in the transcript JSONL (`type == "user"`). Running tools are preserved across resets; completed/error tools are cleared. This makes the tools module show only the current turn's activity instead of cumulative session totals. A separate `SessionToolNames` list (never reset) tracks all tools seen across the session, sorted by most recent usage, limited to 6. Tools with zero count in the current turn show as dimmed `×0`.
+
+## ADR-011: RawMessage Deferred Parsing (2026-03-22)
+
+Transcript JSONL entries use `json.RawMessage` for the `message` field. User messages have `content` as a string; assistant messages have `content` as `[]contentBlock`. A single unmarshal populates header fields (type, timestamp, slug), then message content is decoded only for non-user entries. This avoids double-parsing and gracefully handles the polymorphic content field.
+
+## ADR-012: Agent Tool Name "Agent" (2026-03-22)
+
+Claude Code uses both `"Task"` and `"Agent"` as tool names for subagent dispatch in transcript JSONL. The parser handles both via `case "Task", "Agent"`. A shared `managementTools` map excludes these (plus TaskCreate, TaskUpdate, TodoWrite) from regular tool tracking and session tool names.
+
+## ADR-013: Context Limit Replaces Dot Warn Tokens (2026-03-22)
+
+`dot_warn_tokens` (which only changed the dot to bright yellow) replaced by `context_limit` (default 250k). When set, both the progress bar and dot calculate percentage against this limit instead of the full context window. Exceeding the limit caps at 100%. Set to 0 to use full window size. This reflects that model performance degrades at high token counts -- the bar naturally turns yellow/red as usage approaches the limit, making the old special-case dot color unnecessary. `BRIGHT_YELLOW` and `LAVENDER` removed from ansi package as dead code.

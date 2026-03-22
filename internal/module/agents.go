@@ -28,31 +28,29 @@ func (m *AgentsModule) Vars(ctx *Context) map[string]string {
 	var runParts, compParts []string
 
 	for _, a := range m.agents {
+		name := agentDisplayName(a)
 		switch a.Status {
 		case "running":
-			elapsed := formatElapsed(time.Since(a.StartTime))
-			desc := a.Description
-			if len([]rune(desc)) > 30 {
-				desc = string([]rune(desc)[:30]) + "..."
-			}
-			s := ansi.Colored(ansi.CYAN, ctx.Config.Icon("running")) + " " + a.Type
+			s := ctx.Config.Icon("running") + " " + name
 			if a.Model != "" {
 				s += fmt.Sprintf(" [%s]", a.Model)
 			}
-			if desc != "" {
-				s += ": " + desc
-			}
-			s += fmt.Sprintf(" (%s)", elapsed)
-			runParts = append(runParts, s)
+			runParts = append(runParts, ansi.Colored(ansi.CYAN, s+"..."))
 		case "completed":
 			elapsed := formatElapsed(a.EndTime.Sub(a.StartTime))
-			icon := ansi.Colored(ansi.GREEN, ctx.Config.Icon("completed"))
-			compParts = append(compParts, fmt.Sprintf("%s %s (%s)", icon, a.Type, elapsed))
+			compParts = append(compParts, fmt.Sprintf("%s %s (%s)", ctx.Config.Icon("running"), name, elapsed))
+		case "error":
+			elapsed := formatElapsed(a.EndTime.Sub(a.StartTime))
+			s := fmt.Sprintf("%s %s (%s)", ctx.Config.Icon("running"), name, elapsed)
+			compParts = append(compParts, ansi.Colored(ansi.RED, s))
 		}
 	}
 
-	if len(compParts) > 2 {
-		compParts = compParts[len(compParts)-2:]
+	// When agents are running, hide completed; otherwise show only the latest.
+	if len(runParts) > 0 {
+		compParts = nil
+	} else if len(compParts) > 1 {
+		compParts = compParts[len(compParts)-1:]
 	}
 
 	if len(runParts) == 0 && len(compParts) == 0 {
@@ -77,6 +75,24 @@ func (m *AgentsModule) Vars(ctx *Context) map[string]string {
 }
 
 func (m *AgentsModule) DefaultFormat() string { return "{summary}" }
+
+func agentDisplayName(a transcript.AgentEntry) string {
+	if a.Description != "" {
+		return truncateRunes(a.Description, 50)
+	}
+	if a.Type != "" {
+		return a.Type
+	}
+	return "Agent"
+}
+
+func truncateRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "..."
+}
 
 func formatElapsed(d time.Duration) string {
 	switch {

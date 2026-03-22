@@ -2,6 +2,7 @@ package module
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/mritd/claude-statusline/internal/ansi"
 )
@@ -11,22 +12,22 @@ const defaultBarWidth = 10
 // BarFunc renders a progress bar for a given percentage and width.
 type BarFunc func(pct, width int) string
 
-const DefaultDotWarnTokens = 200_000
+const DefaultContextLimit = 250_000
 
 type ContextModule struct {
-	barWidth      int
-	barFn         BarFunc
-	dotWarnTokens int // token threshold for dot early warning; 0 disables
+	barWidth     int
+	barFn        BarFunc
+	contextLimit int // effective context size for bar/dot; 0 uses full window
 }
 
-func NewContextModule(barWidth, dotWarnTokens int, barFn BarFunc) *ContextModule {
+func NewContextModule(barWidth, contextLimit int, barFn BarFunc) *ContextModule {
 	if barWidth <= 0 {
 		barWidth = defaultBarWidth
 	}
-	if dotWarnTokens < 0 {
-		dotWarnTokens = 0
+	if contextLimit < 0 {
+		contextLimit = 0
 	}
-	return &ContextModule{barWidth: barWidth, dotWarnTokens: dotWarnTokens, barFn: barFn}
+	return &ContextModule{barWidth: barWidth, contextLimit: contextLimit, barFn: barFn}
 }
 
 func (m *ContextModule) Name() string { return "context" }
@@ -45,10 +46,24 @@ func (m *ContextModule) Vars(ctx *Context) map[string]string {
 		barWidth = defaultBarWidth
 	}
 
-	pct := ctx.Stdin.ContextPercent()
 	total := ctx.Stdin.TotalTokens()
 	size := ctx.Stdin.ContextWindow.Size
-	remaining := size - total
+
+	// If context_limit is set, use it as the effective size for percentage.
+	effectiveSize := size
+	if m.contextLimit > 0 {
+		effectiveSize = m.contextLimit
+	}
+
+	pct := 0
+	if effectiveSize > 0 {
+		pct = int(math.Round(float64(total) / float64(effectiveSize) * 100))
+		if pct > 100 {
+			pct = 100
+		}
+	}
+
+	remaining := effectiveSize - total
 	if remaining < 0 {
 		remaining = 0
 	}
@@ -59,9 +74,6 @@ func (m *ContextModule) Vars(ctx *Context) map[string]string {
 	}
 
 	dotColor := ansi.ContextColor(pct)
-	if m.dotWarnTokens > 0 && total >= m.dotWarnTokens && dotColor == ansi.GREEN {
-		dotColor = ansi.BRIGHT_YELLOW
-	}
 
 	vars := map[string]string{
 		"dot":       ansi.Colored(dotColor, "●"),

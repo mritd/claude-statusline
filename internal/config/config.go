@@ -24,7 +24,7 @@ type ModuleConf struct {
 	BarWidth               int    `json:"bar_width"`
 	CacheTTLSeconds        int    `json:"cache_ttl_seconds"`
 	FailureCacheTTLSeconds int    `json:"failure_cache_ttl_seconds"`
-	DotWarnTokens          *int   `json:"dot_warn_tokens,omitempty"`
+	ContextLimit           *int   `json:"context_limit,omitempty"`
 }
 
 var defaultBarStyles = map[string][2]string{
@@ -52,9 +52,9 @@ var defaultIcons = map[string]string{
 
 func Default() *Config {
 	return &Config{
-		Modules:   []string{"context", "usage", "git", "tools"},
+		Modules:   []string{"context", "usage", "git", "tools", "agents", "environment"},
 		Separator: " | ",
-		Newline:   []string{"tools"},
+		Newline:   []string{"tools", "agents", "environment"},
 		BarStyle:  "diamond",
 		BarStyles: defaultBarStyles,
 		Icons:     defaultIcons,
