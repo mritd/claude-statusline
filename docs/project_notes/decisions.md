@@ -31,3 +31,7 @@ Tasks marked as `deleted` via TaskUpdate are filtered out after parsing. This ha
 ## ADR-006: Configurable Icons via `icons` Map
 
 All statusline icons (running, completed, error, todo, done, dirty) are configurable via `icons` map in config.json. Modules read icons through `ctx.Config.Icon(key)` instead of hardcoding. This allows users to fix terminal font alignment issues by swapping characters.
+
+## ADR-009: ANSI Colors in Separate Package (2026-03-22)
+
+Color constants, helpers (`Colored`, `Dim`, `Yellow`), and color threshold functions (`ContextColor`, `QuotaColor`) live in `internal/ansi/`. This breaks the render↔module import cycle: modules need colors for icon styling, render needs module types for orchestration. The render package no longer owns color logic; it imports ansi for bar rendering only.

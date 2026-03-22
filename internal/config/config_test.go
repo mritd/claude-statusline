@@ -11,7 +11,7 @@ func TestDefaultConfig(t *testing.T) {
 	if len(cfg.Modules) != 4 {
 		t.Fatalf("expected 4 default modules, got %d", len(cfg.Modules))
 	}
-	expected := []string{"context", "usage", "todos", "git"}
+	expected := []string{"context", "usage", "git", "tools"}
 	for i, e := range expected {
 		if cfg.Modules[i] != e {
 			t.Fatalf("unexpected default modules: %v", cfg.Modules)

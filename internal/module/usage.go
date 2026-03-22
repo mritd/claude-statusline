@@ -14,16 +14,11 @@ import (
 
 	"github.com/mritd/claude-statusline/internal/debug"
 	"github.com/mritd/claude-statusline/internal/keychain"
+	"github.com/mritd/claude-statusline/internal/ansi"
 )
 
 // QuotaBarFunc renders a quota progress bar for a given percentage and width.
 type QuotaBarFunc func(pct, width int) string
-
-// DimFunc renders text in dim style.
-type DimFunc func(text string) string
-
-// ColorFunc renders text in a specific color.
-type ColorFunc func(text string) string
 
 // UsageModule fetches and displays Anthropic API usage quotas.
 type UsageModule struct {
@@ -32,8 +27,6 @@ type UsageModule struct {
 	failureTTL time.Duration
 	data       *usageData
 	quotaBar   QuotaBarFunc
-	dim        DimFunc
-	yellow     ColorFunc
 }
 
 type usageData struct {
@@ -76,7 +69,7 @@ const (
 )
 
 // NewUsageModule creates a usage module with the given cache directory and TTLs.
-func NewUsageModule(cacheDir string, cacheTTL, failureTTL time.Duration, quotaBar QuotaBarFunc, dim DimFunc, yellow ColorFunc) *UsageModule {
+func NewUsageModule(cacheDir string, cacheTTL, failureTTL time.Duration, quotaBar QuotaBarFunc) *UsageModule {
 	if cacheTTL <= 0 {
 		cacheTTL = 5 * time.Minute // matches Anthropic usage API rate limit window
 	}
@@ -88,8 +81,6 @@ func NewUsageModule(cacheDir string, cacheTTL, failureTTL time.Duration, quotaBa
 		cacheTTL:   cacheTTL,
 		failureTTL: failureTTL,
 		quotaBar:   quotaBar,
-		dim:        dim,
-		yellow:     yellow,
 	}
 }
 
@@ -213,26 +204,26 @@ func (m *UsageModule) Vars(ctx *Context) map[string]string {
 	if !d.FiveHourResetAt.IsZero() {
 		remaining := time.Until(d.FiveHourResetAt)
 		if remaining > 0 {
-			vars["5h_reset"] = formatResetTime(remaining)
+			vars["5h_reset"] = "(" + formatResetTime(remaining) + ")"
 		}
 	}
 	if !d.SevenDayResetAt.IsZero() {
 		remaining := time.Until(d.SevenDayResetAt)
 		if remaining > 0 {
-			vars["7d_reset"] = formatResetTime(remaining)
+			vars["7d_reset"] = "(" + formatResetTime(remaining) + ")"
 		}
 	}
 
-	if d.Syncing && m.dim != nil {
-		vars["syncing"] = " " + m.dim("⟳ syncing...")
+	if d.Syncing {
+		vars["syncing"] = " " + ansi.Dim("⟳ syncing...")
 	}
 
-	if d.APIError > 0 && m.yellow != nil {
+	if d.APIError > 0 {
 		errText := fmt.Sprintf("API %d*", d.APIError)
 		if d.RetryAfter > 0 {
 			errText = fmt.Sprintf("API %d* (%s)", d.APIError, formatResetTime(d.RetryAfter))
 		}
-		vars["api_error"] = m.yellow(errText)
+		vars["api_error"] = ansi.Yellow(errText)
 	} else {
 		vars["api_error"] = ""
 	}
@@ -244,7 +235,7 @@ func (m *UsageModule) DefaultFormat() string {
 	if m.data != nil && m.data.APIError > 0 && m.data.FiveHour == 0 && m.data.SevenDay == 0 {
 		return "{api_error}"
 	}
-	return "Usage {5h_bar} {5h_pct} ({5h_reset}) | {7d_bar} {7d_pct} ({7d_reset}){syncing} {api_error}"
+	return "Usage {5h_bar} {5h_pct} {5h_reset} | {7d_bar} {7d_pct} {7d_reset}{syncing} {api_error}"
 }
 
 // Cache file paths

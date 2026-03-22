@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mritd/claude-statusline/internal/ansi"
 	"github.com/mritd/claude-statusline/internal/transcript"
 )
 
@@ -39,9 +40,9 @@ func (m *ToolsModule) Vars(ctx *Context) map[string]string {
 		start = 0
 	}
 	for _, t := range running[start:] {
-		s := ctx.Config.Icon("running") + " " + t.Name
+		s := ansi.Colored(ansi.CYAN, ctx.Config.Icon("running")+" "+t.Name)
 		if t.Target != "" {
-			s += ": " + t.Target
+			s += ansi.Colored(ansi.CYAN, ": "+t.Target)
 		}
 		runParts = append(runParts, s)
 	}
@@ -59,10 +60,11 @@ func (m *ToolsModule) Vars(ctx *Context) map[string]string {
 		if i >= 4 {
 			break
 		}
+		icon := ansi.Colored(ansi.GREEN, ctx.Config.Icon("completed"))
 		if groups[name] > 1 {
-			compParts = append(compParts, fmt.Sprintf("%s %s ×%d", ctx.Config.Icon("completed"), name, groups[name]))
+			compParts = append(compParts, fmt.Sprintf("%s %s", icon, ansi.Dim(fmt.Sprintf("%s ×%d", name, groups[name]))))
 		} else {
-			compParts = append(compParts, ctx.Config.Icon("completed")+" "+name)
+			compParts = append(compParts, icon+" "+ansi.Dim(name))
 		}
 	}
 

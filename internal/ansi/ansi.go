@@ -1,4 +1,4 @@
-package render
+package ansi
 
 const (
 	RESET          = "\x1b[0m"
@@ -10,7 +10,22 @@ const (
 	BRIGHT_BLUE    = "\x1b[94m"
 	BRIGHT_MAGENTA = "\x1b[95m"
 	DIM            = "\x1b[2m"
+	BOLD           = "\x1b[1m"
+	LAVENDER       = "\x1b[38;5;146m"
+	BRIGHT_YELLOW  = "\x1b[93m"
 )
+
+func Colored(color, text string) string {
+	return color + text + RESET
+}
+
+func Dim(text string) string {
+	return DIM + text + RESET
+}
+
+func Yellow(text string) string {
+	return YELLOW + text + RESET
+}
 
 func ContextColor(pct int) string {
 	switch {
@@ -32,16 +47,4 @@ func QuotaColor(pct int) string {
 	default:
 		return BRIGHT_BLUE
 	}
-}
-
-func Colored(color, text string) string {
-	return color + text + RESET
-}
-
-func Dim(text string) string {
-	return DIM + text + RESET
-}
-
-func Yellow(text string) string {
-	return YELLOW + text + RESET
 }

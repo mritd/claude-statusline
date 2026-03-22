@@ -20,10 +20,19 @@
 - **Cache**: `~/.claude/plugins/claude-statusline/.usage-cache.json`
 - **Lock**: `~/.claude/plugins/claude-statusline/.usage-cache.lock`
 
-## Icons (default)
+## Defaults
 
-- `running=≡`, `completed=✓`, `error=✗`, `todo=▸`, `done=✓`, `dirty=*`
-- Configurable via `icons` map in config.json
+- **Bar style**: diamond (◆/◇)
+- **Modules**: context, usage, git, tools
+- **Newline**: tools (starts on new line)
+- **Icons**: `running=≡`, `completed=✓`, `error=✗`, `todo=▸`, `done=✓`, `dirty=*`
+- **dot_warn_tokens**: 200000 (set to 0 to disable)
+
+## ANSI Colors
+
+- Colors live in `internal/ansi/ansi.go` (separate package to avoid render↔module import cycle)
+- Icon colors only; module text colors stay in their respective Vars() methods
+- `●` dot follows ContextColor (green/yellow/red) with bright yellow override at dot_warn_tokens threshold
 
 ## Debug
 

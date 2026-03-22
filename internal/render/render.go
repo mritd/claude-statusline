@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mritd/claude-statusline/internal/ansi"
 	"github.com/mritd/claude-statusline/internal/config"
 	"github.com/mritd/claude-statusline/internal/debug"
 	"github.com/mritd/claude-statusline/internal/module"
@@ -62,6 +63,6 @@ func Render(ctx *module.Context, registry *module.Registry, cfg *config.Config) 
 
 func Print(output string) {
 	for _, line := range strings.Split(output, "\n") {
-		fmt.Println(RESET + line)
+		fmt.Println(ansi.RESET + line)
 	}
 }

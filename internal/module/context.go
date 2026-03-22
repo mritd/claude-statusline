@@ -1,22 +1,32 @@
 package module
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/mritd/claude-statusline/internal/ansi"
+)
 
 const defaultBarWidth = 10
 
 // BarFunc renders a progress bar for a given percentage and width.
 type BarFunc func(pct, width int) string
 
+const DefaultDotWarnTokens = 200_000
+
 type ContextModule struct {
-	barWidth int
-	barFn    BarFunc
+	barWidth      int
+	barFn         BarFunc
+	dotWarnTokens int // token threshold for dot early warning; 0 disables
 }
 
-func NewContextModule(barWidth int, barFn BarFunc) *ContextModule {
+func NewContextModule(barWidth, dotWarnTokens int, barFn BarFunc) *ContextModule {
 	if barWidth <= 0 {
 		barWidth = defaultBarWidth
 	}
-	return &ContextModule{barWidth: barWidth, barFn: barFn}
+	if dotWarnTokens < 0 {
+		dotWarnTokens = 0
+	}
+	return &ContextModule{barWidth: barWidth, dotWarnTokens: dotWarnTokens, barFn: barFn}
 }
 
 func (m *ContextModule) Name() string { return "context" }
@@ -48,7 +58,13 @@ func (m *ContextModule) Vars(ctx *Context) map[string]string {
 		barStr = m.barFn(pct, barWidth)
 	}
 
+	dotColor := ansi.ContextColor(pct)
+	if m.dotWarnTokens > 0 && total >= m.dotWarnTokens && dotColor == ansi.GREEN {
+		dotColor = ansi.BRIGHT_YELLOW
+	}
+
 	vars := map[string]string{
+		"dot":       ansi.Colored(dotColor, "●"),
 		"bar":       barStr,
 		"percent":   fmt.Sprintf("%d%%", pct),
 		"tokens":    formatTokens(total),
@@ -66,7 +82,7 @@ func (m *ContextModule) Vars(ctx *Context) map[string]string {
 }
 
 func (m *ContextModule) DefaultFormat() string {
-	return "Context {bar} {percent}"
+	return "{dot} Context {bar} {percent}"
 }
 
 func formatTokens(n int) string {

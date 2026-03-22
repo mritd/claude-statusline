@@ -24,6 +24,7 @@ type ModuleConf struct {
 	BarWidth               int    `json:"bar_width"`
 	CacheTTLSeconds        int    `json:"cache_ttl_seconds"`
 	FailureCacheTTLSeconds int    `json:"failure_cache_ttl_seconds"`
+	DotWarnTokens          *int   `json:"dot_warn_tokens,omitempty"`
 }
 
 var defaultBarStyles = map[string][2]string{
@@ -51,9 +52,10 @@ var defaultIcons = map[string]string{
 
 func Default() *Config {
 	return &Config{
-		Modules:   []string{"context", "usage", "todos", "git"},
+		Modules:   []string{"context", "usage", "git", "tools"},
 		Separator: " | ",
-		BarStyle:  "block",
+		Newline:   []string{"tools"},
+		BarStyle:  "diamond",
 		BarStyles: defaultBarStyles,
 		Icons:     defaultIcons,
 		Raw:       make(map[string]json.RawMessage),
@@ -163,11 +165,8 @@ func writeDefault(path string, cfg *Config) {
 	}
 
 	out := map[string]any{
-		"modules":    cfg.Modules,
-		"separator":  cfg.Separator,
-		"bar_style":  cfg.BarStyle,
-		"bar_styles": cfg.BarStyles,
-		"icons":      cfg.Icons,
+		"modules":   cfg.Modules,
+		"separator": cfg.Separator,
 	}
 
 	data, err := json.MarshalIndent(out, "", "  ")

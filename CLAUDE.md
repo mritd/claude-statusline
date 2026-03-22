@@ -25,10 +25,11 @@ The binary is invoked by Claude Code's `statusLine` hook. It receives a JSON blo
 
 | Package | Description |
 |---------|-------------|
+| ansi | ANSI color constants, helpers (`Colored`, `Dim`, `Yellow`), and color threshold functions (`ContextColor`, `QuotaColor`). Separate package to avoid render↔module import cycle |
 | stdin | Parses JSON input from Claude Code (model, context window, transcript path) |
 | config | Loads `~/.claude/plugins/claude-statusline/config.json`; auto-generates defaults on first run; provides per-module config and bar style resolution |
 | module | Pluggable module system. Each module implements `Module` interface (`Name`, `Collect`, `Vars`, `DefaultFormat`). Registry renders modules in config order |
-| render | Progress bar rendering via closure injection (`NewContextBar`/`NewQuotaBar`), ANSI color output, format expansion (`{var}` substitution) |
+| render | Progress bar rendering via closure injection (`NewContextBar`/`NewQuotaBar`), format expansion (`{var}` substitution) |
 | transcript | Streams JSONL transcript file to extract active tools, subagents, and todos |
 | keychain | Platform-specific credential retrieval (macOS: `/usr/bin/security` CLI, other: `~/.claude/.credentials.json`) |
 | debug | Conditional stderr logging enabled by `DEBUG=claude-statusline` or `DEBUG=*` |
@@ -37,11 +38,11 @@ The binary is invoked by Claude Code's `statusLine` hook. It receives a JSON blo
 
 | Module | Default | Data Source | Description |
 |--------|---------|-------------|-------------|
-| context | enabled | stdin JSON | Context window usage bar |
+| context | enabled | stdin JSON | Context window usage bar with status dot |
 | usage | enabled | Claude API + cache | 5h/7d API quota bars with caching |
-| todos | enabled | transcript JSONL | Todo progress from TaskCreate/Update; auto-completes stale in_progress, filters deleted |
 | git | enabled | git CLI | Branch, dirty, ahead/behind status |
-| tools | disabled | transcript JSONL | Active tool call tracking |
+| tools | enabled | transcript JSONL | Active/completed tool call tracking |
+| todos | disabled | transcript JSONL | Todo progress from TaskCreate/Update; auto-completes stale in_progress, filters deleted |
 | agents | disabled | transcript JSONL | Subagent status tracking |
 | project | disabled | stdin JSON | Model name and project path |
 | environment | disabled | filesystem | CLAUDE.md, rules, MCPs, hooks counts |
@@ -63,9 +64,15 @@ The usage module fetches API quotas via HTTP and caches responses:
 - **File locking**: Prevents concurrent fetches from multiple statusline processes
 - **Last good data**: On failure, displays previous successful data with `syncing` indicator
 
-## Project Notes
+## Project Memory System
 
-Design decisions and key configuration facts are maintained in `docs/project_notes/` for consistency across sessions:
+Institutional knowledge is maintained in `docs/project_notes/` for consistency across sessions:
 
 - **decisions.md** - Architectural Decision Records (ADRs)
-- **key_facts.md** - API endpoints, keychain details, cache config
+- **key_facts.md** - API endpoints, keychain details, defaults, ANSI color info
+- **bugs.md** - Bug log with dates, root causes, solutions
+- **issues.md** - Work log with descriptions and status
+
+**Before proposing architectural changes:** check `decisions.md` for existing ADRs.
+**When encountering bugs:** search `bugs.md` for similar issues.
+**When resolving bugs or completing work:** update the appropriate file.

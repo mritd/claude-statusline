@@ -34,7 +34,7 @@ func TestMainIntegration(t *testing.T) {
 	if !strings.Contains(output, "Context") {
 		t.Fatalf("expected Context in output, got: %q", output)
 	}
-	if !strings.Contains(output, "█") {
+	if !strings.Contains(output, "◆") {
 		t.Fatalf("expected bar chars in output, got: %q", output)
 	}
 	if !strings.Contains(output, "50%") {

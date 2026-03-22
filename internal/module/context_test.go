@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mritd/claude-statusline/internal/ansi"
 	"github.com/mritd/claude-statusline/internal/stdin"
 )
 
@@ -27,7 +28,7 @@ func TestContextVars(t *testing.T) {
 			CurrentUsage: &stdin.TokenUsage{InputTokens: 90000},
 		},
 	}
-	m := NewContextModule(10, testBarFn)
+	m := NewContextModule(10, DefaultDotWarnTokens, testBarFn)
 	ctx := &Context{Stdin: data}
 	_ = m.Collect(ctx)
 	vars := m.Vars(ctx)
@@ -57,7 +58,7 @@ func TestContextVarsCritical(t *testing.T) {
 			},
 		},
 	}
-	m := NewContextModule(10, testBarFn)
+	m := NewContextModule(10, DefaultDotWarnTokens, testBarFn)
 	ctx := &Context{Stdin: data}
 	_ = m.Collect(ctx)
 	vars := m.Vars(ctx)
@@ -67,6 +68,39 @@ func TestContextVarsCritical(t *testing.T) {
 	}
 	if vars["breakdown"] == "" {
 		t.Fatal("breakdown should be populated at >=85%")
+	}
+}
+
+func TestDotWarnTokens(t *testing.T) {
+	// 200k tokens in 1M window = 20%, green zone but exceeds warn threshold
+	data := &stdin.Data{
+		ContextWindow: stdin.ContextWindow{
+			Size:         1_000_000,
+			CurrentUsage: &stdin.TokenUsage{InputTokens: 200_000},
+		},
+	}
+	m := NewContextModule(10, DefaultDotWarnTokens, testBarFn)
+	ctx := &Context{Stdin: data}
+	_ = m.Collect(ctx)
+	vars := m.Vars(ctx)
+
+	if !strings.Contains(vars["dot"], ansi.BRIGHT_YELLOW) {
+		t.Fatalf("dot should be bright yellow at 200k tokens, got %q", vars["dot"])
+	}
+
+	// 100k tokens — below threshold, should be green
+	data.ContextWindow.CurrentUsage.InputTokens = 100_000
+	vars = m.Vars(ctx)
+	if !strings.Contains(vars["dot"], ansi.GREEN) {
+		t.Fatalf("dot should be green below threshold, got %q", vars["dot"])
+	}
+
+	// dot_warn_tokens=0 disables the feature
+	m2 := NewContextModule(10, 0, testBarFn)
+	data.ContextWindow.CurrentUsage.InputTokens = 200_000
+	vars = m2.Vars(ctx)
+	if !strings.Contains(vars["dot"], ansi.GREEN) {
+		t.Fatalf("dot should be green when warn disabled, got %q", vars["dot"])
 	}
 }
 

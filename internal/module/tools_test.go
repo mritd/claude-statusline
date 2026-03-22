@@ -1,6 +1,7 @@
 package module
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -43,7 +44,7 @@ func TestToolsVarsGrouped(t *testing.T) {
 	m := NewToolsModule()
 	_ = m.Collect(ctx)
 	vars := m.Vars(ctx)
-	if vars["completed"] != "✓ Read ×3" {
+	if !strings.Contains(vars["completed"], "✓") || !strings.Contains(vars["completed"], "Read ×3") {
 		t.Fatalf("unexpected: %q", vars["completed"])
 	}
 }

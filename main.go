@@ -45,9 +45,13 @@ func run() {
 
 	// Context module - BarFunc injected to avoid import cycle
 	mc := cfg.ModuleConfig("context")
-	registry.Register(module.NewContextModule(mc.BarWidth, contextBar))
+	dotWarnTokens := module.DefaultDotWarnTokens
+	if mc.DotWarnTokens != nil {
+		dotWarnTokens = *mc.DotWarnTokens
+	}
+	registry.Register(module.NewContextModule(mc.BarWidth, dotWarnTokens, contextBar))
 
-	// Usage module - QuotaBarFunc and DimFunc injected
+	// Usage module - QuotaBarFunc injected
 	uc := cfg.ModuleConfig("usage")
 	cacheTTL := 300 // 5 min, matches Anthropic usage API rate limit window
 	failureTTL := 15
@@ -62,7 +66,7 @@ func run() {
 	registry.Register(module.NewUsageModule(cacheDir,
 		time.Duration(cacheTTL)*time.Second,
 		time.Duration(failureTTL)*time.Second,
-		quotaBar, render.Dim, render.Yellow))
+		quotaBar))
 
 	// Git module
 	registry.Register(module.NewGitModule())

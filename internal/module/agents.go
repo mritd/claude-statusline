@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mritd/claude-statusline/internal/ansi"
 	"github.com/mritd/claude-statusline/internal/transcript"
 )
 
@@ -31,10 +32,10 @@ func (m *AgentsModule) Vars(ctx *Context) map[string]string {
 		case "running":
 			elapsed := formatElapsed(time.Since(a.StartTime))
 			desc := a.Description
-			if len(desc) > 30 {
-				desc = desc[:30] + "..."
+			if len([]rune(desc)) > 30 {
+				desc = string([]rune(desc)[:30]) + "..."
 			}
-			s := fmt.Sprintf("%s %s", ctx.Config.Icon("running"), a.Type)
+			s := ansi.Colored(ansi.CYAN, ctx.Config.Icon("running")) + " " + a.Type
 			if a.Model != "" {
 				s += fmt.Sprintf(" [%s]", a.Model)
 			}
@@ -45,7 +46,8 @@ func (m *AgentsModule) Vars(ctx *Context) map[string]string {
 			runParts = append(runParts, s)
 		case "completed":
 			elapsed := formatElapsed(a.EndTime.Sub(a.StartTime))
-			compParts = append(compParts, fmt.Sprintf("%s %s (%s)", ctx.Config.Icon("completed"), a.Type, elapsed))
+			icon := ansi.Colored(ansi.GREEN, ctx.Config.Icon("completed"))
+			compParts = append(compParts, fmt.Sprintf("%s %s (%s)", icon, a.Type, elapsed))
 		}
 	}
 
