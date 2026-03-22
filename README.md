@@ -97,7 +97,7 @@ Override any icon used in the statusline:
 | `context` | enabled | Context window usage bar with status dot |
 | `usage` | enabled | 5h/7d API usage with reset times |
 | `git` | enabled | Branch name + dirty indicator |
-| `tools` | enabled | Per-turn tool calls with session history |
+| `tools` | enabled | Session-wide tool call counts with per-turn highlighting |
 | `agents` | enabled | Subagent status (running/completed) |
 | `project` | disabled | Model name + project path |
 | `environment` | enabled | CLAUDE.md/rules/MCP counts |
@@ -182,12 +182,12 @@ Usage module caches API responses. Configurable per-module:
 
 ## Tools module
 
-The tools module tracks tool calls per turn (resets on each user message). It maintains a session-wide list of the 6 most recently used tools, sorted by last usage time.
+The tools module displays session-wide cumulative tool call counts. It tracks the 6 most recently used tools, sorted by last usage time. Tools active in the current turn are highlighted; inactive tools are dimmed.
 
 - **Running**: shows tool name + target (file path or command), cyan
-- **Completed**: shows count (`✓ Read ×3`), green icon + dim text
-- **Error**: shows count (`✗ Bash ×1`), red icon + dim text
-- **Inactive**: tools used in previous turns but not the current one show as dimmed `×0`
+- **Completed (active)**: session count with green icon + dim text (`✓ Read ×23`)
+- **Error (active)**: session count with red icon + dim text (`✗ Bash ×2`)
+- **Inactive**: tools not used in the current turn show dimmed with session count (`✓ Write ×5`)
 
 ## Agents module
 

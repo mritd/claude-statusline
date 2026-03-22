@@ -9,8 +9,9 @@ import (
 )
 
 type ToolsModule struct {
-	tools            []transcript.ToolEntry
-	sessionToolNames []string
+	tools             []transcript.ToolEntry
+	sessionToolNames  []string
+	sessionToolCounts map[string]int
 }
 
 func NewToolsModule() *ToolsModule  { return &ToolsModule{} }
@@ -22,6 +23,7 @@ func (m *ToolsModule) Collect(ctx *Context) error {
 	}
 	m.tools = ctx.Transcript.Tools
 	m.sessionToolNames = ctx.Transcript.SessionToolNames
+	m.sessionToolCounts = ctx.Transcript.SessionToolCounts
 	return nil
 }
 
@@ -55,26 +57,36 @@ func (m *ToolsModule) Vars(ctx *Context) map[string]string {
 		runParts = append(runParts, s)
 	}
 
+	// Collect names of currently running tools to exclude from session list.
+	runningNames := make(map[string]bool)
+	for _, t := range running {
+		runningNames[t.Name] = true
+	}
+
 	// Build completed/error parts from session tool names.
-	// Tools with current-turn count > 0 get colored icons; count == 0 get dimmed.
+	// Tools active in current turn get colored icons; inactive tools get dimmed.
+	// All counts are session-wide cumulative. Skip running tools (already shown).
 	compIcon := ctx.Config.Icon("completed")
 	errIcon := ctx.Config.Icon("error")
 	var compParts, errParts []string
 	for _, name := range m.sessionToolNames {
+		if runningNames[name] {
+			continue
+		}
+		sc := m.sessionToolCounts[name]
 		ec := errCounts[name]
 		cc := compCounts[name]
 		if ec > 0 {
 			errParts = append(errParts, fmt.Sprintf("%s %s",
 				ansi.Colored(ansi.RED, errIcon),
-				ansi.Dim(fmt.Sprintf("%s ×%d", name, ec))))
-		}
-		if cc > 0 {
+				ansi.Dim(fmt.Sprintf("%s ×%d", name, sc))))
+		} else if cc > 0 {
 			compParts = append(compParts, fmt.Sprintf("%s %s",
 				ansi.Colored(ansi.GREEN, compIcon),
-				ansi.Dim(fmt.Sprintf("%s ×%d", name, cc))))
-		} else if ec == 0 {
-			// Tool seen in session but not this turn: dimmed icon + ×0.
-			compParts = append(compParts, ansi.Dim(fmt.Sprintf("%s %s ×0", compIcon, name)))
+				ansi.Dim(fmt.Sprintf("%s ×%d", name, sc))))
+		} else {
+			// Tool seen in session but not this turn: dimmed.
+			compParts = append(compParts, ansi.Dim(fmt.Sprintf("%s %s ×%d", compIcon, name, sc)))
 		}
 	}
 

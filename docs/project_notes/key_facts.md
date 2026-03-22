@@ -38,7 +38,9 @@
 - Agent tool names: both `"Task"` and `"Agent"` map to agents module
 - Tail scan: seeks to last `max_tail_size` bytes of file; discards first partial line after seek
 - `managementTools` set: Task, Agent (excluded from tool stats)
-- Tool stats reset on `type == "user"` entries; running tools preserved, completed/error cleared
+- Tool entries reset on `type == "user"` entries; running tools preserved, completed/error cleared
+- `SessionToolCounts` tracks cumulative call counts per tool name (never reset); used for display
+- Per-turn status (completed/error) used only for highlight vs dim styling
 
 ## ANSI Colors
 

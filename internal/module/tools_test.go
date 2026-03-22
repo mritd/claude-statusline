@@ -17,7 +17,8 @@ func TestToolsVarsRunning(t *testing.T) {
 				{Name: "Edit", Target: "auth.ts", Status: "running", StartTime: time.Now()},
 				{Name: "Read", Target: "foo.go", Status: "completed"},
 			},
-			SessionToolNames: []string{"Edit", "Read"},
+			SessionToolNames:  []string{"Edit", "Read"},
+			SessionToolCounts: map[string]int{"Edit": 3, "Read": 5},
 		},
 	}
 	m := NewToolsModule()
@@ -39,7 +40,8 @@ func TestToolsVarsErrors(t *testing.T) {
 				{Name: "Read", Status: "completed"},
 				{Name: "Bash", Status: "error"},
 			},
-			SessionToolNames: []string{"Read", "Bash"},
+			SessionToolNames:  []string{"Read", "Bash"},
+			SessionToolCounts: map[string]int{"Read": 7, "Bash": 2},
 		},
 	}
 	m := NewToolsModule()
@@ -65,37 +67,39 @@ func TestToolsVarsGrouped(t *testing.T) {
 				{Name: "Read", Status: "completed"},
 				{Name: "Read", Status: "completed"},
 			},
-			SessionToolNames: []string{"Read"},
+			SessionToolNames:  []string{"Read"},
+			SessionToolCounts: map[string]int{"Read": 15},
 		},
 	}
 	m := NewToolsModule()
 	_ = m.Collect(ctx)
 	vars := m.Vars(ctx)
-	if !strings.Contains(vars["completed"], "✓") || !strings.Contains(vars["completed"], "Read ×3") {
+	if !strings.Contains(vars["completed"], "✓") || !strings.Contains(vars["completed"], "Read ×15") {
 		t.Fatalf("unexpected: %q", vars["completed"])
 	}
 }
 
-func TestToolsVarsDimmedZeroCount(t *testing.T) {
-	// Read was used in a previous turn but not this one; should show dimmed ×0
+func TestToolsVarsDimmedSessionCount(t *testing.T) {
+	// Read was used in a previous turn but not this one; should show dimmed with session count
 	ctx := &Context{
 		Config: config.Default(),
 		Transcript: &transcript.Data{
 			Tools: []transcript.ToolEntry{
 				{Name: "Bash", Status: "completed"},
 			},
-			SessionToolNames: []string{"Read", "Bash"},
+			SessionToolNames:  []string{"Read", "Bash"},
+			SessionToolCounts: map[string]int{"Read": 12, "Bash": 5},
 		},
 	}
 	m := NewToolsModule()
 	_ = m.Collect(ctx)
 	vars := m.Vars(ctx)
-	// Bash should have colored icon with ×1
-	if !strings.Contains(vars["completed"], "Bash ×1") {
-		t.Fatalf("expected Bash ×1, got: %q", vars["completed"])
+	// Bash active this turn: colored icon with session count
+	if !strings.Contains(vars["completed"], "Bash ×5") {
+		t.Fatalf("expected Bash ×5, got: %q", vars["completed"])
 	}
-	// Read should show ×0 (dimmed)
-	if !strings.Contains(vars["completed"], "Read ×0") {
-		t.Fatalf("expected dimmed Read ×0, got: %q", vars["completed"])
+	// Read inactive this turn: dimmed with session count
+	if !strings.Contains(vars["completed"], "Read ×12") {
+		t.Fatalf("expected dimmed Read ×12, got: %q", vars["completed"])
 	}
 }

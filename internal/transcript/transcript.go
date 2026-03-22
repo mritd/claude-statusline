@@ -15,10 +15,11 @@ import (
 const maxSessionTools = 6
 
 type Data struct {
-	Tools            []ToolEntry
-	Agents           []AgentEntry
-	SessionName      string
-	SessionToolNames []string // all unique tool names across entire session (never reset)
+	Tools             []ToolEntry
+	Agents            []AgentEntry
+	SessionName       string
+	SessionToolNames  []string       // all unique tool names across entire session (never reset)
+	SessionToolCounts map[string]int // cumulative tool call counts across session (never reset)
 }
 
 type ToolEntry struct {
@@ -56,6 +57,7 @@ func Parse(path string, maxTailBytes int64) (*Data, error) {
 
 	toolMap := make(map[string]int)
 	sessionToolLast := make(map[string]time.Time) // last usage time per tool name
+	sessionToolCounts := make(map[string]int)     // cumulative call counts per tool name
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
@@ -110,6 +112,7 @@ func Parse(path string, maxTailBytes int64) (*Data, error) {
 				handleToolUse(data, block, entry.Timestamp, toolMap)
 				if !managementTools[block.Name] {
 					sessionToolLast[block.Name] = entry.Timestamp
+					sessionToolCounts[block.Name]++
 				}
 			case "tool_result":
 				handleToolResult(data, block, entry.Timestamp, toolMap)
@@ -134,6 +137,7 @@ func Parse(path string, maxTailBytes int64) (*Data, error) {
 	if len(data.SessionToolNames) > maxSessionTools {
 		data.SessionToolNames = data.SessionToolNames[:maxSessionTools]
 	}
+	data.SessionToolCounts = sessionToolCounts
 
 	return data, nil
 }

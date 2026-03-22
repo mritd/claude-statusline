@@ -43,3 +43,8 @@
 - **Status**: Completed
 - **Description**: Removed todos module (Claude Code's own UI handles this; JSONL data unreliable). Added tail scan optimization: `max_tail_size` config (default `"10MB"`) makes transcript parser seek to file tail for large JSONL files. Fixed scanner buffer overflow (1MB -> 16MB max) that caused agents to not be detected after large tool_result entries. Removed `SessionStart` field.
 - **Notes**: See ADR-014, bugs.md scanner buffer entry
+
+### 2026-03-22 - Session-wide tool counts and running tool dedup
+
+- **Status**: Completed
+- **Description**: Tool counts changed from per-turn to session-wide cumulative (`SessionToolCounts`). Per-turn status used only for highlight vs dim styling. Fixed running tools appearing as duplicate dimmed entries by excluding them from session tool list. See ADR-010 update.
