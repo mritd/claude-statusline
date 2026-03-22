@@ -22,7 +22,7 @@ Todos module removed. Claude Code's own task UI already displays todo progress, 
 
 ## ADR-006: Configurable Icons via `icons` Map
 
-All statusline icons (running, completed, error, todo, done, dirty) are configurable via `icons` map in config.json. Modules read icons through `ctx.Config.Icon(key)` instead of hardcoding. This allows users to fix terminal font alignment issues by swapping characters.
+All statusline icons (running, completed, error, dirty) are configurable via `icons` map in config.json. Modules read icons through `ctx.Config.Icon(key)` instead of hardcoding. This allows users to fix terminal font alignment issues by swapping characters.
 
 ## ADR-009: ANSI Colors in Separate Package (2026-03-22)
 
@@ -42,10 +42,8 @@ Claude Code uses both `"Task"` and `"Agent"` as tool names for subagent dispatch
 
 ## ADR-013: Context Limit Replaces Dot Warn Tokens (2026-03-22)
 
+`dot_warn_tokens` (which only changed the dot to bright yellow) replaced by `context_limit` (default 250k). When set, both the progress bar and dot calculate percentage against this limit instead of the full context window. Exceeding the limit caps at 100%. Set to 0 to use full window size. This reflects that model performance degrades at high token counts -- the bar naturally turns yellow/red as usage approaches the limit, making the old special-case dot color unnecessary. `BRIGHT_YELLOW` and `LAVENDER` removed from ansi package as dead code.
+
 ## ADR-014: Tail Scan for Large JSONL Files (2026-03-22)
 
 JSONL transcript files grow unbounded (append-only, never truncated within a session). Long sessions with large tool_result entries can produce files of tens to hundreds of MB. Since no data item requires full session history (todos module removed), the parser seeks to the last `max_tail_size` bytes (default `"10MB"`, configurable as human-readable string like `"50MB"`, `"512KB"`). Set to `"0"` for full scan. `SessionStart` field removed as no module depended on it.
-
-## ADR-013: Context Limit Replaces Dot Warn Tokens (2026-03-22)
-
-`dot_warn_tokens` (which only changed the dot to bright yellow) replaced by `context_limit` (default 250k). When set, both the progress bar and dot calculate percentage against this limit instead of the full context window. Exceeding the limit caps at 100%. Set to 0 to use full window size. This reflects that model performance degrades at high token counts -- the bar naturally turns yellow/red as usage approaches the limit, making the old special-case dot color unnecessary. `BRIGHT_YELLOW` and `LAVENDER` removed from ansi package as dead code.

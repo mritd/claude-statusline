@@ -11,18 +11,22 @@ func (m *ProjectModule) Name() string               { return "project" }
 func (m *ProjectModule) Collect(ctx *Context) error { return nil }
 
 func (m *ProjectModule) Vars(ctx *Context) map[string]string {
-	vars := map[string]string{
-		"model": "",
-		"plan":  "",
-		"path":  "",
-	}
+	model := ""
 	if ctx.Stdin != nil {
-		vars["model"] = ctx.Stdin.Model.DisplayName
+		model = ctx.Stdin.Model.DisplayName
 	}
+	path := ""
 	if ctx.CWD != "" {
-		vars["path"] = filepath.Base(ctx.CWD)
+		path = filepath.Base(ctx.CWD)
 	}
-	return vars
+	if model == "" && path == "" {
+		return nil
+	}
+	return map[string]string{
+		"model": model,
+		"plan":  "",
+		"path":  path,
+	}
 }
 
 func (m *ProjectModule) DefaultFormat() string {

@@ -45,10 +45,12 @@ func Parse(path string, maxTailBytes int64) (*Data, error) {
 	defer func() { _ = f.Close() }()
 
 	// Tail scan: skip to the last maxTailBytes of the file
+	var seeked bool
 	if maxTailBytes > 0 {
 		if info, err := f.Stat(); err == nil && info.Size() > maxTailBytes {
 			debug.Log("transcript", "tail scan: file %d bytes, seeking to last %d", info.Size(), maxTailBytes)
 			_, _ = f.Seek(-maxTailBytes, io.SeekEnd)
+			seeked = true
 		}
 	}
 
@@ -58,10 +60,9 @@ func Parse(path string, maxTailBytes int64) (*Data, error) {
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 
-	// If we seeked into the middle of the file, the first line is likely
-	// partial (we landed mid-line). Discard it unconditionally -- even if
-	// we happen to be at byte 0 the first line is just a system entry.
-	if maxTailBytes > 0 {
+	// After seeking into the middle of the file, the first line is likely
+	// partial (we landed mid-line). Discard it.
+	if seeked {
 		scanner.Scan()
 	}
 
@@ -179,14 +180,6 @@ func handleToolResult(data *Data, block *contentBlock, ts time.Time, toolMap map
 		data.Tools[idx].Status = "completed"
 	}
 	data.Tools[idx].EndTime = ts
-
-	for i := range data.Agents {
-		if data.Agents[i].ID == block.ToolUseID {
-			data.Agents[i].Status = "completed"
-			data.Agents[i].EndTime = ts
-			break
-		}
-	}
 }
 
 func extractTarget(block *contentBlock) string {
