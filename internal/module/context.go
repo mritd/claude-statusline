@@ -56,9 +56,11 @@ func (m *ContextModule) Vars(ctx *Context) map[string]string {
 	}
 
 	pct := 0
+	overLimit := false
 	if effectiveSize > 0 {
 		pct = int(math.Round(float64(total) / float64(effectiveSize) * 100))
 		if pct > 100 {
+			overLimit = m.contextLimit > 0
 			pct = 100
 		}
 	}
@@ -75,10 +77,15 @@ func (m *ContextModule) Vars(ctx *Context) map[string]string {
 
 	dotColor := ansi.ContextColor(pct)
 
+	pctStr := fmt.Sprintf("%d%%", pct)
+	if overLimit {
+		pctStr = formatTokens(total)
+	}
+
 	vars := map[string]string{
 		"dot":       ansi.Colored(dotColor, "●"),
 		"bar":       barStr,
-		"percent":   fmt.Sprintf("%d%%", pct),
+		"percent":   pctStr,
 		"tokens":    formatTokens(total),
 		"remaining": formatTokens(remaining),
 	}

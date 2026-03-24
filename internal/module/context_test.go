@@ -108,11 +108,11 @@ func TestContextLimit(t *testing.T) {
 		t.Fatalf("dot should be yellow at 83%%, got %q", vars["dot"])
 	}
 
-	// usage=400k -> exceeds limit, cap at 100%
+	// usage=400k -> exceeds limit, show actual tokens instead of 100%
 	data.ContextWindow.CurrentUsage.InputTokens = 400_000
 	vars = m.Vars(ctx)
-	if vars["percent"] != "100%" {
-		t.Fatalf("expected 100%% (capped), got %s", vars["percent"])
+	if vars["percent"] != "400k" {
+		t.Fatalf("expected 400k (over limit), got %s", vars["percent"])
 	}
 	if !strings.Contains(vars["dot"], ansi.RED) {
 		t.Fatalf("dot should be red at 100%%, got %q", vars["dot"])

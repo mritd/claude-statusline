@@ -55,6 +55,98 @@ A default config is auto-generated on first run at `~/.claude/plugins/claude-sta
 
 All other settings (bar styles, icons, etc.) have built-in defaults and only need to be added when you want to override them.
 
+### Full configuration reference
+
+```jsonc
+{
+  // Enabled modules, rendered left-to-right in this order.
+  // Available: context, usage, git, tools, agents, project, environment
+  "modules": ["context", "usage", "git", "tools", "agents", "environment"],
+
+  // Separator between modules on the same line.
+  "separator": " | ",
+
+  // Modules listed here start on a new line instead of being separated.
+  "newline": ["tools", "agents", "environment"],
+
+  // Progress bar style. Built-in: block, square, small, bar, dot,
+  // diamond, line, braille, shade, half, half-block
+  "bar_style": "diamond",
+
+  // Custom bar styles. Each entry is [filled, empty] character pair.
+  "bar_styles": {
+    "stars": ["★", "☆"]
+  },
+
+  // Override icons used in the statusline.
+  //   running   - active tool or subagent (default: ≡)
+  //   completed - finished tool call (default: ✓)
+  //   error     - failed tool call (default: ✗)
+  //   dirty     - git uncommitted changes (default: *)
+  "icons": {
+    "running": "≡",
+    "completed": "✓",
+    "error": "✗",
+    "dirty": "*"
+  },
+
+  // Max bytes to read from the end of JSONL transcript.
+  // Human-readable sizes: "512KB", "10MB", "1GB". Set "0" for full scan.
+  "max_tail_size": "10MB",
+
+  // Per-module configuration. Each module supports "format" for custom
+  // template and "bar_width" for bar character count (default: 10).
+
+  // Context window usage. Variables: {dot} {bar} {percent} {tokens} {remaining} {breakdown}
+  //   context_limit: treat this token count as 100% (default: 250000).
+  //                  When exceeded, {percent} shows actual usage (e.g. "300k").
+  //                  Set to 0 to use the full context window size.
+  "context": {
+    "format": "{dot} Context {bar} {percent}",
+    "bar_width": 10,
+    "context_limit": 250000
+  },
+
+  // API usage quotas. Variables: {plan} {5h_bar} {5h_pct} {5h_reset}
+  //   {7d_bar} {7d_pct} {7d_reset} {syncing} {api_error}
+  //   cache_ttl_seconds: how long to cache successful API responses (default: 300)
+  //   failure_cache_ttl_seconds: cache TTL for failed requests (default: 15)
+  "usage": {
+    "format": "{plan} {5h_bar} {5h_pct} {5h_reset} | {7d_bar} {7d_pct} {7d_reset}{syncing}{api_error}",
+    "bar_width": 10,
+    "cache_ttl_seconds": 300,
+    "failure_cache_ttl_seconds": 15
+  },
+
+  // Git branch info. Variables: {branch} {dirty} {ahead} {behind}
+  "git": {
+    "format": "{branch}{dirty}{ahead}{behind}"
+  },
+
+  // Tool call tracking. Variables: {running} {completed} {errors} {summary}
+  "tools": {
+    "format": "{summary}"
+  },
+
+  // Subagent tracking. Variables: {running} {completed} {summary}
+  "agents": {
+    "format": "{summary}"
+  },
+
+  // Model and project info (disabled by default). Variables: {model} {plan} {path}
+  "project": {
+    "format": "{model} {path}"
+  },
+
+  // Environment counts. Variables: {claude_md} {rules} {mcps} {hooks}
+  "environment": {
+    "format": "{claude_md} CLAUDE.md | {rules} rules | {mcps} MCPs | {hooks} hooks"
+  }
+}
+```
+
+> **Note**: JSON does not support comments. The JSONC above is for documentation only — remove all `//` comments before using.
+
 ### Bar styles
 
 Default style is `diamond` (◆/◇). Change `bar_style` to switch presets, or add custom entries to `bar_styles`:
