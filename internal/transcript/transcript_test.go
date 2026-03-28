@@ -202,6 +202,37 @@ func TestTailScanSkipsOldEntries(t *testing.T) {
 	}
 }
 
+func TestTailScanDiscardsOrphanRunningTools(t *testing.T) {
+	// Simulate tail scan landing after a tool_use but before its tool_result.
+	// The orphan running tool started before the last user message and should
+	// be discarded.
+	orphan := `{"timestamp":"2025-01-01T00:00:00Z","type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Edit","input":{"file_path":"/tmp/a.go"}}]}}` + "\n"
+	// No tool_result for t1 — simulates truncation
+	userMsg := `{"timestamp":"2025-01-01T00:01:00Z","type":"user","message":{"role":"user","content":"next"}}` + "\n"
+	current := `{"timestamp":"2025-01-01T00:02:00Z","type":"assistant","message":{"content":[{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":"/tmp/b.go"}}]}}` + "\n"
+	currentResult := `{"timestamp":"2025-01-01T00:02:01Z","type":"assistant","message":{"content":[{"type":"tool_result","tool_use_id":"t2"}]}}` + "\n"
+
+	// Pad before orphan so tail scan actually seeks
+	padding := ""
+	for len(padding) < 2048 {
+		padding += `{"timestamp":"2024-12-31T00:00:00Z","type":"progress"}` + "\n"
+	}
+
+	content := padding + orphan + userMsg + current + currentResult
+	path := writeTempJSONL(t, content)
+
+	// Tail scan: orphan Edit should be discarded, only Read remains
+	data, _ := Parse(path, 1024)
+	for _, tool := range data.Tools {
+		if tool.Name == "Edit" && tool.Status == "running" {
+			t.Fatalf("orphan running Edit should have been discarded, got %+v", data.Tools)
+		}
+	}
+	if len(data.Tools) != 1 || data.Tools[0].Name != "Read" {
+		t.Fatalf("expected [completed Read], got %+v", data.Tools)
+	}
+}
+
 func writeTempJSONL(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "transcript.jsonl")

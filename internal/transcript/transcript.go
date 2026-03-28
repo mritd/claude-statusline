@@ -58,6 +58,7 @@ func Parse(path string, maxTailBytes int64) (*Data, error) {
 	toolMap := make(map[string]int)
 	sessionToolLast := make(map[string]time.Time) // last usage time per tool name
 	sessionToolCounts := make(map[string]int)     // cumulative call counts per tool name
+	var lastUserTS time.Time                      // timestamp of the last user message
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
@@ -83,6 +84,7 @@ func Parse(path string, maxTailBytes int64) (*Data, error) {
 		// Reset completed/error tools on each user message so stats
 		// reflect only the current turn.
 		if entry.Type == "user" {
+			lastUserTS = entry.Timestamp
 			var kept []ToolEntry
 			newMap := make(map[string]int)
 			for _, t := range data.Tools {
@@ -118,6 +120,24 @@ func Parse(path string, maxTailBytes int64) (*Data, error) {
 				handleToolResult(data, block, entry.Timestamp, toolMap)
 			}
 		}
+	}
+
+	// After tail scan, a tool_use near the scan boundary may lack its
+	// tool_result (truncated away). These orphan entries stay "running"
+	// forever. Discard running tools that started before the last user
+	// message — real running tools belong to the current (latest) turn.
+	// Only apply when tail scan was used; full scans preserve legitimate
+	// cross-turn running tools.
+	if seeked && !lastUserTS.IsZero() {
+		var cleaned []ToolEntry
+		for _, t := range data.Tools {
+			if t.Status == "running" && t.StartTime.Before(lastUserTS) {
+				debug.Log("transcript", "discarding orphan running tool %s (%s)", t.Name, t.ID)
+				continue
+			}
+			cleaned = append(cleaned, t)
+		}
+		data.Tools = cleaned
 	}
 
 	// Build session tool names sorted by most recent usage, limited to 6.
