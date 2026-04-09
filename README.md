@@ -7,8 +7,8 @@ Single Go binary. Zero external dependencies. Starts in <5ms.
 <img width="1290" height="173" alt="image" src="https://github.com/user-attachments/assets/6618cbb4-0769-4d3d-a26c-bb59feba9149" />
 
 ```
-● Context ◆◇◇◇◇◇◇◇◇◇ 14% | Usage ◆◇◇◇◇◇◇◇◇◇ 4% (2h 22m) | ◆◆◆◇◇◇◇◇◇◇ 31% (2d 14h) | main*
-≡ Read: config.go | ✓ Bash ×5 | ✓ Edit ×3 | ✓ Read ×2 | ✓ Write ×0 | ✗ Bash ×1
+● Ctx ◆◇◇◇◇◇◇◇◇◇ 14% | Usage ◆◇◇◇◇◇◇◇◇◇ 4% (2h 22m) | ◆◆◆◇◇◇◇◇◇◇ 31% (2d 14h) | main*
+≡ Read: config.go | ✓ Bash ×5 | ✓ Edit ×3 | ✓ Read ×2 | ✓ Write ×4 | ✗ Bash ×1
 ≡ Review all uncommitted changes
 ```
 
@@ -102,7 +102,7 @@ All other settings (bar styles, icons, etc.) have built-in defaults and only nee
   //                  When exceeded, {percent} shows actual usage (e.g. "300k").
   //                  Set to 0 to use the full context window size.
   "context": {
-    "format": "{dot} Context {bar} {percent}",
+    "format": "{dot} Ctx {bar} {percent}",
     "bar_width": 10,
     "context_limit": 250000
   },
@@ -241,8 +241,8 @@ Use `newline` to break modules onto separate lines. Default: tools starts on a n
 
 Output:
 ```
-● Context ◆◇◇◇◇◇◇◇◇◇ 14% | Usage ◇◇◇◇◇◇◇◇◇◇ 4% (2h 22m) | ◆◆◆◇◇◇◇◇◇◇ 31% (2d 14h) | main*
-✓ Bash ×5 | ✓ Edit ×3 | ✓ Read ×0 | ✓ Grep ×0 | ✓ Write ×0 | ✓ Glob ×0
+● Ctx ◆◇◇◇◇◇◇◇◇◇ 14% | Usage ◇◇◇◇◇◇◇◇◇◇ 4% (2h 22m) | ◆◆◆◇◇◇◇◇◇◇ 31% (2d 14h) | main*
+✓ Bash ×5 | ✓ Edit ×3 | ✓ Read ×12 | ✓ Grep ×4 | ✓ Write ×2 | ✓ Glob ×1
 ≡ Review all uncommitted changes
 2 CLAUDE.md | 7 rules | 0 MCPs | 0 hooks
 ```

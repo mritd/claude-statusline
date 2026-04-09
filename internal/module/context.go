@@ -101,7 +101,7 @@ func (m *ContextModule) Vars(ctx *Context) map[string]string {
 }
 
 func (m *ContextModule) DefaultFormat() string {
-	return "{dot} Context {bar} {percent}"
+	return "{dot} Ctx {bar} {percent}"
 }
 
 func formatTokens(n int) string {

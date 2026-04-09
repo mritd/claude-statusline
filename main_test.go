@@ -31,8 +31,8 @@ func TestMainIntegration(t *testing.T) {
 	_, _ = io.Copy(&buf, r)
 	output := buf.String()
 
-	if !strings.Contains(output, "Context") {
-		t.Fatalf("expected Context in output, got: %q", output)
+	if !strings.Contains(output, "Ctx") {
+		t.Fatalf("expected Ctx in output, got: %q", output)
 	}
 	if !strings.Contains(output, "◆") {
 		t.Fatalf("expected bar chars in output, got: %q", output)
