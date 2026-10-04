@@ -14,22 +14,32 @@ import (
 
 const maxSessionTools = 6
 
+// Status is the lifecycle state of a tool or agent call.
+type Status string
+
+const (
+	StatusRunning   Status = "running"
+	StatusCompleted Status = "completed"
+	StatusError     Status = "error"
+)
+
 type Data struct {
 	Tools             []ToolEntry
 	Agents            []AgentEntry
-	SessionName       string
 	SessionToolNames  []string       // all unique tool names across entire session (never reset)
 	SessionToolCounts map[string]int // cumulative tool call counts across session (never reset)
 }
 
 type ToolEntry struct {
-	ID, Name, Target, Status string
-	StartTime, EndTime       time.Time
+	ID, Name, Target   string
+	Status             Status
+	StartTime, EndTime time.Time
 }
 
 type AgentEntry struct {
-	ID, Type, Model, Description, Status string
-	StartTime, EndTime                   time.Time
+	ID, Type, Model, Description string
+	Status                       Status
+	StartTime, EndTime           time.Time
 }
 
 func Parse(path string, maxTailBytes int64) (*Data, error) {
@@ -58,7 +68,7 @@ func Parse(path string, maxTailBytes int64) (*Data, error) {
 	toolMap := make(map[string]int)
 	sessionToolLast := make(map[string]time.Time) // last usage time per tool name
 	sessionToolCounts := make(map[string]int)     // cumulative call counts per tool name
-	var lastUserTS time.Time                      // timestamp of the last user message
+	var lastPromptTS time.Time                    // timestamp of the last user prompt
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
@@ -75,20 +85,26 @@ func Parse(path string, maxTailBytes int64) (*Data, error) {
 			continue
 		}
 
-		if entry.Type == "custom-title" && entry.CustomTitle != "" {
-			data.SessionName = entry.CustomTitle
-		} else if entry.Slug != "" {
-			data.SessionName = entry.Slug
+		if entry.Message == nil {
+			continue
+		}
+		// Typed prompts carry string content; everything else (assistant
+		// turns, tool_result carriers) is a list of content blocks.
+		var blocks []contentBlock
+		if content := entry.Message.Content; len(content) > 0 && content[0] == '[' {
+			if err := json.Unmarshal(content, &blocks); err != nil {
+				continue
+			}
 		}
 
-		// Reset completed/error tools on each user message so stats
-		// reflect only the current turn.
-		if entry.Type == "user" {
-			lastUserTS = entry.Timestamp
+		// Reset completed/error tools on each user prompt so stats reflect
+		// only the current turn.
+		if isUserPrompt(&entry, blocks) {
+			lastPromptTS = entry.Timestamp
 			var kept []ToolEntry
 			newMap := make(map[string]int)
 			for _, t := range data.Tools {
-				if t.Status == "running" {
+				if t.Status == StatusRunning {
 					newMap[t.ID] = len(kept)
 					kept = append(kept, t)
 				}
@@ -97,22 +113,12 @@ func Parse(path string, maxTailBytes int64) (*Data, error) {
 			toolMap = newMap
 		}
 
-		// Decode message content only when present (user messages have
-		// string content that would fail decoding to []contentBlock).
-		if entry.RawMessage == nil {
-			continue
-		}
-		var msg jsonMessage
-		if err := json.Unmarshal(*entry.RawMessage, &msg); err != nil {
-			continue
-		}
-
-		for i := range msg.Content {
-			block := &msg.Content[i]
+		for i := range blocks {
+			block := &blocks[i]
 			switch block.Type {
 			case "tool_use":
 				handleToolUse(data, block, entry.Timestamp, toolMap)
-				if !managementTools[block.Name] {
+				if !isAgentTool(block.Name) {
 					sessionToolLast[block.Name] = entry.Timestamp
 					sessionToolCounts[block.Name]++
 				}
@@ -125,13 +131,13 @@ func Parse(path string, maxTailBytes int64) (*Data, error) {
 	// After tail scan, a tool_use near the scan boundary may lack its
 	// tool_result (truncated away). These orphan entries stay "running"
 	// forever. Discard running tools that started before the last user
-	// message — real running tools belong to the current (latest) turn.
+	// prompt — real running tools belong to the current (latest) turn.
 	// Only apply when tail scan was used; full scans preserve legitimate
 	// cross-turn running tools.
-	if seeked && !lastUserTS.IsZero() {
+	if seeked && !lastPromptTS.IsZero() {
 		var cleaned []ToolEntry
 		for _, t := range data.Tools {
-			if t.Status == "running" && t.StartTime.Before(lastUserTS) {
+			if t.Status == StatusRunning && t.StartTime.Before(lastPromptTS) {
 				debug.Log("transcript", "discarding orphan running tool %s (%s)", t.Name, t.ID)
 				continue
 			}
@@ -163,26 +169,47 @@ func Parse(path string, maxTailBytes int64) (*Data, error) {
 }
 
 func handleToolUse(data *Data, block *contentBlock, ts time.Time, toolMap map[string]int) {
-	switch block.Name {
-	case "Task", "Agent":
+	if isAgentTool(block.Name) {
 		data.Agents = append(data.Agents, AgentEntry{
 			ID:          block.ID,
 			Type:        block.Input.SubagentType,
 			Model:       block.Input.Model,
 			Description: block.Input.Description,
-			Status:      "running",
+			Status:      StatusRunning,
 			StartTime:   ts,
 		})
-	default:
-		data.Tools = append(data.Tools, ToolEntry{
-			ID:        block.ID,
-			Name:      block.Name,
-			Target:    extractTarget(block),
-			Status:    "running",
-			StartTime: ts,
-		})
-		toolMap[block.ID] = len(data.Tools) - 1
+		return
 	}
+	data.Tools = append(data.Tools, ToolEntry{
+		ID:        block.ID,
+		Name:      block.Name,
+		Target:    extractTarget(block),
+		Status:    StatusRunning,
+		StartTime: ts,
+	})
+	toolMap[block.ID] = len(data.Tools) - 1
+}
+
+// isUserPrompt reports whether the entry is a prompt the user typed, which
+// starts a new turn. Tool results are also recorded as "user" entries, and
+// meta entries (skill bodies, command caveats) are injected mid-turn; neither
+// starts a turn.
+func isUserPrompt(entry *jsonEntry, blocks []contentBlock) bool {
+	if entry.Type != "user" || entry.IsMeta {
+		return false
+	}
+	for i := range blocks {
+		if blocks[i].Type == "tool_result" {
+			return false
+		}
+	}
+	return true
+}
+
+// isAgentTool reports whether the tool spawns a subagent. Agent tools are
+// tracked by the agents module, not counted as regular tools.
+func isAgentTool(name string) bool {
+	return name == "Task" || name == "Agent"
 }
 
 func handleToolResult(data *Data, block *contentBlock, ts time.Time, toolMap map[string]int) {
@@ -191,7 +218,7 @@ func handleToolResult(data *Data, block *contentBlock, ts time.Time, toolMap map
 		// Check if it's an agent result
 		for i := range data.Agents {
 			if data.Agents[i].ID == block.ToolUseID {
-				data.Agents[i].Status = "completed"
+				data.Agents[i].Status = StatusCompleted
 				data.Agents[i].EndTime = ts
 				break
 			}
@@ -199,9 +226,9 @@ func handleToolResult(data *Data, block *contentBlock, ts time.Time, toolMap map
 		return
 	}
 	if block.IsError {
-		data.Tools[idx].Status = "error"
+		data.Tools[idx].Status = StatusError
 	} else {
-		data.Tools[idx].Status = "completed"
+		data.Tools[idx].Status = StatusCompleted
 	}
 	data.Tools[idx].EndTime = ts
 }
@@ -239,22 +266,14 @@ func truncatePath(p string, maxLen int) string {
 }
 
 type jsonEntry struct {
-	Timestamp   time.Time        `json:"timestamp"`
-	Type        string           `json:"type"`
-	CustomTitle string           `json:"customTitle"`
-	Slug        string           `json:"slug"`
-	RawMessage  *json.RawMessage `json:"message"`
-}
-
-// managementTools are tool names handled by dedicated branches in handleToolUse
-// (not tracked as regular tools or in sessionToolLast).
-var managementTools = map[string]bool{
-	"Task":  true,
-	"Agent": true,
+	Timestamp time.Time    `json:"timestamp"`
+	Type      string       `json:"type"`
+	IsMeta    bool         `json:"isMeta"`
+	Message   *jsonMessage `json:"message"`
 }
 
 type jsonMessage struct {
-	Content []contentBlock `json:"content"`
+	Content json.RawMessage `json:"content"`
 }
 
 type contentBlock struct {

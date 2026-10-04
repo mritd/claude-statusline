@@ -12,21 +12,25 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mritd/claude-statusline/internal/ansi"
 	"github.com/mritd/claude-statusline/internal/debug"
 	"github.com/mritd/claude-statusline/internal/keychain"
-	"github.com/mritd/claude-statusline/internal/ansi"
+	"github.com/mritd/claude-statusline/internal/stdin"
 )
 
-// QuotaBarFunc renders a quota progress bar for a given percentage and width.
-type QuotaBarFunc func(pct, width int) string
-
-// UsageModule fetches and displays Anthropic API usage quotas.
+// UsageModule displays subscription usage quotas. It prefers the rate_limits
+// Claude Code passes on stdin and falls back to the Anthropic usage API.
 type UsageModule struct {
 	cacheDir   string
 	cacheTTL   time.Duration
 	failureTTL time.Duration
+	barWidth   int
 	data       *usageData
-	quotaBar   QuotaBarFunc
+	quotaBar   BarFunc
+
+	// Injected for tests; default to the keychain and the usage API.
+	readCreds func() (*keychain.Credentials, error)
+	fetch     func(token string) (*apiResponse, int, time.Duration, error)
 }
 
 type usageData struct {
@@ -62,32 +66,46 @@ type apiResponse struct {
 }
 
 const (
-	usageAPIURL    = "https://api.anthropic.com/api/oauth/usage"
-	maxBackoff     = 5 * time.Minute
-	lockStaleSecs  = 30
-	defaultBarSize = 10
+	usageAPIURL       = "https://api.anthropic.com/api/oauth/usage"
+	defaultCacheTTL   = 5 * time.Minute // matches Anthropic usage API rate limit window
+	defaultFailureTTL = 15 * time.Second
+	maxBackoff        = 5 * time.Minute
+	lockStaleSecs     = 30
 )
 
-// NewUsageModule creates a usage module with the given cache directory and TTLs.
-func NewUsageModule(cacheDir string, cacheTTL, failureTTL time.Duration, quotaBar QuotaBarFunc) *UsageModule {
+// NewUsageModule creates a usage module with the given cache directory, TTLs
+// and bar width. Non-positive values fall back to the defaults.
+func NewUsageModule(cacheDir string, cacheTTL, failureTTL time.Duration, barWidth int, quotaBar BarFunc) *UsageModule {
 	if cacheTTL <= 0 {
-		cacheTTL = 5 * time.Minute // matches Anthropic usage API rate limit window
+		cacheTTL = defaultCacheTTL
 	}
 	if failureTTL <= 0 {
-		failureTTL = 15 * time.Second
+		failureTTL = defaultFailureTTL
+	}
+	if barWidth <= 0 {
+		barWidth = defaultBarWidth
 	}
 	return &UsageModule{
 		cacheDir:   cacheDir,
 		cacheTTL:   cacheTTL,
 		failureTTL: failureTTL,
+		barWidth:   barWidth,
 		quotaBar:   quotaBar,
+		readCreds:  keychain.Read,
+		fetch:      fetchAPI,
 	}
 }
 
 func (m *UsageModule) Name() string { return "usage" }
 
 func (m *UsageModule) Collect(ctx *Context) error {
-	// Skip if custom API endpoint is configured
+	if d := usageFromStdin(ctx.Stdin); d != nil {
+		debug.Log("usage", "using stdin rate_limits")
+		m.data = d
+		return nil
+	}
+
+	// Skip the API fallback if a custom API endpoint is configured
 	if os.Getenv("ANTHROPIC_BASE_URL") != "" || os.Getenv("ANTHROPIC_API_KEY") != "" {
 		debug.Log("usage", "custom API endpoint detected, skipping usage")
 		return nil
@@ -110,6 +128,16 @@ func (m *UsageModule) Collect(ctx *Context) error {
 		}
 	}
 
+	// Honor 429 backoff before touching credentials or the network
+	if existing != nil && time.Now().UnixMilli() < existing.RetryAfterUntil {
+		debug.Log("usage", "in backoff period, using last good data")
+		if lastGood := lastGoodFrom(existing); lastGood != nil {
+			lastGood.Syncing = true
+			m.data = lastGood
+		}
+		return nil
+	}
+
 	// Try to acquire lock for fetching
 	if !m.tryLock() {
 		debug.Log("usage", "lock busy, using last good data")
@@ -122,31 +150,19 @@ func (m *UsageModule) Collect(ctx *Context) error {
 	defer m.unlock()
 
 	// Read credentials
-	creds, err := keychain.Read()
+	creds, err := m.readCreds()
 	if err != nil {
 		debug.Log("usage", "keychain read: %v", err)
 		m.writeCacheFailureFrom(existing)
 		return nil
 	}
 
-	// Check rate limit backoff
-	if existing != nil && existing.RetryAfterUntil > 0 {
-		if time.Now().UnixMilli() < existing.RetryAfterUntil {
-			debug.Log("usage", "in backoff period, using last good data")
-			if existing.LastGoodData != nil {
-				existing.LastGoodData.Syncing = true
-				m.data = existing.LastGoodData
-			}
-			return nil
-		}
-	}
-
 	// Fetch from API
-	usage, statusCode, retryAfter, err := m.fetchAPI(creds.AccessToken)
+	usage, statusCode, retryAfter, err := m.fetch(creds.AccessToken)
 	if err != nil {
 		debug.Log("usage", "API fetch: %v", err)
 		if statusCode == 429 {
-			m.writeCacheRateLimited(existing, creds.SubscriptionType)
+			m.writeCacheRateLimited(existing)
 		} else {
 			m.writeCacheFailureFrom(existing)
 		}
@@ -197,8 +213,8 @@ func (m *UsageModule) Vars(ctx *Context) map[string]string {
 	}
 
 	if m.quotaBar != nil {
-		vars["5h_bar"] = m.quotaBar(d.FiveHour, defaultBarSize)
-		vars["7d_bar"] = m.quotaBar(d.SevenDay, defaultBarSize)
+		vars["5h_bar"] = m.quotaBar(d.FiveHour, m.barWidth)
+		vars["7d_bar"] = m.quotaBar(d.SevenDay, m.barWidth)
 	}
 
 	if !d.FiveHourResetAt.IsZero() {
@@ -295,50 +311,33 @@ func (m *UsageModule) writeCacheSuccess(data *usageData) {
 }
 
 func (m *UsageModule) writeCacheFailureFrom(existing *usageCache) {
-	cache := &usageCache{
-		Timestamp: time.Now().UnixMilli(),
-		IsFailure: true,
-	}
-	if existing != nil {
-		cache.LastGoodData = existing.LastGoodData
-		if cache.LastGoodData == nil {
-			cache.LastGoodData = existing.Data
-		}
-	}
-	if cache.LastGoodData != nil {
-		syncing := *cache.LastGoodData
-		syncing.Syncing = true
-		cache.Data = &syncing
-	}
+	cache := fallbackCache(existing)
+	cache.IsFailure = true
 	m.writeCache(cache)
 }
 
-func (m *UsageModule) writeCacheRateLimited(existing *usageCache, subscriptionType string) {
+func (m *UsageModule) writeCacheRateLimited(existing *usageCache) {
 	count := 1
 	if existing != nil {
 		count = existing.RateLimitedCount + 1
 	}
+	cache := fallbackCache(existing)
+	cache.RateLimitedCount = count
+	cache.RetryAfterUntil = time.Now().Add(backoffDuration(count)).UnixMilli()
+	m.writeCache(cache)
+}
 
-	backoff := backoffDuration(count)
-	retryUntil := time.Now().Add(backoff).UnixMilli()
-
-	cache := &usageCache{
-		Timestamp:        time.Now().UnixMilli(),
-		RateLimitedCount: count,
-		RetryAfterUntil:  retryUntil,
-	}
-	if existing != nil {
-		cache.LastGoodData = existing.LastGoodData
-		if cache.LastGoodData == nil {
-			cache.LastGoodData = existing.Data
-		}
-	}
-	if cache.LastGoodData != nil {
-		syncing := *cache.LastGoodData
+// fallbackCache builds a cache entry for a failed fetch: it carries over the
+// last good data and exposes a copy marked as syncing for display.
+func fallbackCache(existing *usageCache) *usageCache {
+	cache := &usageCache{Timestamp: time.Now().UnixMilli()}
+	if lastGood := lastGoodFrom(existing); lastGood != nil {
+		cache.LastGoodData = lastGood
+		syncing := *lastGood
 		syncing.Syncing = true
 		cache.Data = &syncing
 	}
-	m.writeCache(cache)
+	return cache
 }
 
 // File lock for coordinating between short-lived processes
@@ -369,7 +368,7 @@ func (m *UsageModule) unlock() {
 
 // API fetch
 
-func (m *UsageModule) fetchAPI(token string) (*apiResponse, int, time.Duration, error) {
+func fetchAPI(token string) (*apiResponse, int, time.Duration, error) {
 	req, err := http.NewRequest("GET", usageAPIURL, nil)
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("create request: %w", err)
@@ -408,6 +407,36 @@ func (m *UsageModule) fetchAPI(token string) (*apiResponse, int, time.Duration, 
 }
 
 // Helper functions
+
+// usageFromStdin converts the rate_limits Claude Code reports on stdin. It
+// returns nil when neither window is present. A missing window has reset,
+// so it shows as 0%.
+func usageFromStdin(in *stdin.Data) *usageData {
+	if in == nil || in.RateLimits == nil {
+		return nil
+	}
+	rl := in.RateLimits
+	if rl.FiveHour == nil && rl.SevenDay == nil {
+		return nil
+	}
+	data := &usageData{}
+	if w := rl.FiveHour; w != nil {
+		data.FiveHour = clampPercent(w.UsedPercentage)
+		data.FiveHourResetAt = unixTime(int64(w.ResetsAt))
+	}
+	if w := rl.SevenDay; w != nil {
+		data.SevenDay = clampPercent(w.UsedPercentage)
+		data.SevenDayResetAt = unixTime(int64(w.ResetsAt))
+	}
+	return data
+}
+
+func unixTime(secs int64) time.Time {
+	if secs <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(secs, 0)
+}
 
 func parseRetryAfter(val string) int {
 	if val == "" {

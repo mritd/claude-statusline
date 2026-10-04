@@ -13,6 +13,9 @@ func TestMainIntegration(t *testing.T) {
 
 	// Use temp dir so test gets default config, not user's real config
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	// Skip the usage API fallback so the test never reads credentials or
+	// hits the network
+	t.Setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:0")
 
 	old := os.Stdout
 	r, w, _ := os.Pipe()

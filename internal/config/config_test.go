@@ -95,3 +95,68 @@ func TestModuleConfig(t *testing.T) {
 		t.Fatalf("expected barWidth 20, got %d", mc.BarWidth)
 	}
 }
+
+func TestLoadMergesMapsWithoutMutatingDefaults(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	_ = os.WriteFile(path, []byte(`{"icons":{"dirty":"!"},"bar_styles":{"custom":["#","-"]}}`), 0600)
+	cfg := Load(path)
+	if cfg.Icon("dirty") != "!" || cfg.Icon("running") != "≡" {
+		t.Fatalf("expected merged icons, got %v", cfg.Icons)
+	}
+	if _, ok := cfg.BarStyles["custom"]; !ok {
+		t.Fatalf("expected custom bar style, got %v", cfg.BarStyles)
+	}
+	if _, ok := cfg.BarStyles["diamond"]; !ok {
+		t.Fatalf("expected default bar styles kept, got %v", cfg.BarStyles)
+	}
+	if defaultIcons["dirty"] != "*" {
+		t.Fatalf("Load mutated package defaults: %v", defaultIcons)
+	}
+	if _, ok := defaultBarStyles["custom"]; ok {
+		t.Fatal("Load mutated package default bar styles")
+	}
+}
+
+func TestLoadSkipsMistypedField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	_ = os.WriteFile(path, []byte(`{"separator":123,"modules":["git"],"git":{"format":"{branch}"}}`), 0600)
+	cfg := Load(path)
+	if cfg.Separator != " | " {
+		t.Fatalf("expected default separator for mistyped field, got %q", cfg.Separator)
+	}
+	if len(cfg.Modules) != 1 || cfg.Modules[0] != "git" {
+		t.Fatalf("expected other fields applied, got %v", cfg.Modules)
+	}
+	if cfg.ModuleConfig("git").Format != "{branch}" {
+		t.Fatalf("expected module config parsed, got %+v", cfg.ModuleConfig("git"))
+	}
+}
+
+func TestLoadMalformedFallsBackToDefaults(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	_ = os.WriteFile(path, []byte(`{"modules":["git"`), 0600)
+	cfg := Load(path)
+	if len(cfg.Modules) != 6 {
+		t.Fatalf("expected defaults on malformed JSON, got %v", cfg.Modules)
+	}
+}
+
+func TestLoadIgnoresBadMapsAndKeepsModuleFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	data := `{"icons":{"dirty":1,"running":"R"},"bar_styles":null,"usage":{"format":"X","bar_width":"10"}}`
+	_ = os.WriteFile(path, []byte(data), 0600)
+	cfg := Load(path)
+	if cfg.Icon("dirty") != "*" || cfg.Icon("running") != "≡" {
+		t.Fatalf("bad icons map should be ignored, got %v", cfg.Icons)
+	}
+	if f, e := cfg.BarChars(); f != "◆" || e != "◇" {
+		t.Fatalf("null bar_styles should keep defaults, got %q %q", f, e)
+	}
+	if mc := cfg.ModuleConfig("usage"); mc.Format != "X" {
+		t.Fatalf("mistyped bar_width should not drop format, got %+v", mc)
+	}
+}

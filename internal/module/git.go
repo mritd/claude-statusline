@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mritd/claude-statusline/internal/ansi"
 	"github.com/mritd/claude-statusline/internal/debug"
 )
 
@@ -78,20 +79,14 @@ func (m *GitModule) Collect(ctx *Context) error {
 }
 
 func (m *GitModule) Vars(ctx *Context) map[string]string {
-	const (
-		green  = "\x1b[1;32m" // bold green - branch (prezto sorin)
-		yellow = "\x1b[33m"   // yellow - dirty indicator
-		reset  = "\x1b[0m"
-	)
-
 	vars := map[string]string{
-		"branch": green + m.branch + reset,
+		"branch": ansi.Colored(ansi.BOLD_GREEN, m.branch), // prezto sorin style
 		"dirty":  "",
 		"ahead":  "",
 		"behind": "",
 	}
 	if m.dirty {
-		vars["dirty"] = yellow + ctx.Config.Icon("dirty") + reset
+		vars["dirty"] = ansi.Yellow(ctx.Config.Icon("dirty"))
 	}
 	if m.ahead > 0 {
 		vars["ahead"] = fmt.Sprintf("↑%d", m.ahead)

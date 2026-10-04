@@ -49,3 +49,20 @@ func (s *stubModule) Name() string                        { return s.name }
 func (s *stubModule) Collect(ctx *Context) error          { return nil }
 func (s *stubModule) Vars(ctx *Context) map[string]string { return nil }
 func (s *stubModule) DefaultFormat() string               { return "" }
+
+func TestJoinNonEmpty(t *testing.T) {
+	tests := []struct {
+		parts []string
+		want  string
+	}{
+		{nil, ""},
+		{[]string{"", ""}, ""},
+		{[]string{"a", "", "b"}, "a | b"},
+		{[]string{"", "c"}, "c"},
+	}
+	for _, tt := range tests {
+		if got := joinNonEmpty(" | ", tt.parts...); got != tt.want {
+			t.Errorf("joinNonEmpty(%q) = %q, want %q", tt.parts, got, tt.want)
+		}
+	}
+}

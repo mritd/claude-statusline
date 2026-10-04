@@ -45,6 +45,17 @@ func (r *Registry) Enabled(names []string) []Module {
 	return result
 }
 
+// joinNonEmpty joins the non-empty parts with sep.
+func joinNonEmpty(sep string, parts ...string) string {
+	var kept []string
+	for _, p := range parts {
+		if p != "" {
+			kept = append(kept, p)
+		}
+	}
+	return strings.Join(kept, sep)
+}
+
 func ExpandFormat(format string, vars map[string]string) string {
 	var b strings.Builder
 	i := 0

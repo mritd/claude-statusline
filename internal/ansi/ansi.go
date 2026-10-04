@@ -4,12 +4,13 @@ const (
 	RESET          = "\x1b[0m"
 	RED            = "\x1b[31m"
 	GREEN          = "\x1b[32m"
+	BOLD_GREEN     = "\x1b[1;32m"
 	YELLOW         = "\x1b[33m"
 	MAGENTA        = "\x1b[35m"
 	CYAN           = "\x1b[36m"
 	BRIGHT_BLUE    = "\x1b[94m"
 	BRIGHT_MAGENTA = "\x1b[95m"
-	DIM = "\x1b[2m"
+	DIM            = "\x1b[2m"
 )
 
 func Colored(color, text string) string {

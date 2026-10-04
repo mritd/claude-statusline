@@ -48,3 +48,10 @@
 
 - **Status**: Completed
 - **Description**: Tool counts changed from per-turn to session-wide cumulative (`SessionToolCounts`). Per-turn status used only for highlight vs dim styling. Fixed running tools appearing as duplicate dimmed entries by excluding them from session tool list. See ADR-010 update.
+
+### 2026-10-04 - Refactor pass: stdin rate limits, transcript turn fix, cleanups
+
+- **Status**: Completed
+- **Description**: Usage reads stdin `rate_limits` first (ADR-015). Fixed transcript turn boundary and usage bar width / backoff order (see bugs.md). Removed dead code (`ContextPercent`, `BufferedPercent`, `SessionName`, project `{plan}`). Unified `BarFunc`, added `joinNonEmpty`, typed `transcript.Status`, git colors via `ansi`. Config loads with a single unmarshal, no longer mutates package default maps, and parses module sections once. Cache and environment paths honor `CLAUDE_CONFIG_DIR`. stdin parsing tolerates mistyped fields (one schema drift no longer blanks the statusline). Usage credential read and API fetch are injectable for tests.
+- **Verification**: `go vet ./...`, `go test ./...` (8 packages) and `golangci-lint run` clean; end-to-end run of the built binary with a real transcript and sample stdin (stdin rate_limits used, malformed `resets_at` tolerated). An independent review found 4 regressions (stdin type errors blanking output, module config dropped on a mistyped field, bad icon/bar_style values replacing defaults, extra transcript decode pass); all fixed with regression tests.
+- **Notes**: Investigated "autoCompactWindow 600k compacts at ~560k": Claude Code (2.1.289) compacts at `min(window, autoCompactWindow) - min(maxOutputTokens, 20000) - 13000` = 567k; statusline shows last-response input tokens, so it reads a bit lower. Not a statusline bug; set `context_limit` to the threshold if the bar should fill at compaction.

@@ -51,22 +51,12 @@ func run() {
 	}
 	registry.Register(module.NewContextModule(mc.BarWidth, contextLimit, contextBar))
 
-	// Usage module - QuotaBarFunc injected
+	// Usage module - BarFunc injected
 	uc := cfg.ModuleConfig("usage")
-	cacheTTL := 300 // 5 min, matches Anthropic usage API rate limit window
-	failureTTL := 15
-	if uc.CacheTTLSeconds > 0 {
-		cacheTTL = uc.CacheTTLSeconds
-	}
-	if uc.FailureCacheTTLSeconds > 0 {
-		failureTTL = uc.FailureCacheTTLSeconds
-	}
-	home, _ := os.UserHomeDir()
-	cacheDir := home + "/.claude/plugins/claude-statusline"
-	registry.Register(module.NewUsageModule(cacheDir,
-		time.Duration(cacheTTL)*time.Second,
-		time.Duration(failureTTL)*time.Second,
-		quotaBar))
+	registry.Register(module.NewUsageModule(config.PluginDir(),
+		time.Duration(uc.CacheTTLSeconds)*time.Second,
+		time.Duration(uc.FailureCacheTTLSeconds)*time.Second,
+		uc.BarWidth, quotaBar))
 
 	// Git module
 	registry.Register(module.NewGitModule())

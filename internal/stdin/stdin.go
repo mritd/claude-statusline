@@ -2,15 +2,16 @@ package stdin
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
-	"math"
-)
 
-const autocompactBufferPercent = 0.165
+	"github.com/mritd/claude-statusline/internal/debug"
+)
 
 type Data struct {
 	Model          Model         `json:"model"`
 	ContextWindow  ContextWindow `json:"context_window"`
+	RateLimits     *RateLimits   `json:"rate_limits"`
 	TranscriptPath string        `json:"transcript_path"`
 	CWD            string        `json:"cwd"`
 }
@@ -21,10 +22,8 @@ type Model struct {
 }
 
 type ContextWindow struct {
-	Size                int         `json:"context_window_size"`
-	CurrentUsage        *TokenUsage `json:"current_usage"`
-	UsedPercentage      *float64    `json:"used_percentage"`
-	RemainingPercentage *float64    `json:"remaining_percentage"`
+	Size         int         `json:"context_window_size"`
+	CurrentUsage *TokenUsage `json:"current_usage"`
 }
 
 type TokenUsage struct {
@@ -34,10 +33,30 @@ type TokenUsage struct {
 	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 }
 
+// RateLimits mirrors the subscription quota windows Claude Code reports.
+// Present only for subscribers after the first API response; a window is
+// omitted once its resets_at has passed.
+type RateLimits struct {
+	FiveHour *RateWindow `json:"five_hour"`
+	SevenDay *RateWindow `json:"seven_day"`
+}
+
+type RateWindow struct {
+	UsedPercentage float64 `json:"used_percentage"`
+	ResetsAt       float64 `json:"resets_at"` // Unix epoch seconds
+}
+
+// Parse decodes the statusline JSON. A field with an unexpected type is left
+// at its zero value so one schema drift cannot blank the whole statusline;
+// malformed JSON is still an error.
 func Parse(r io.Reader) (*Data, error) {
 	var data Data
 	if err := json.NewDecoder(r).Decode(&data); err != nil {
-		return nil, err
+		var typeErr *json.UnmarshalTypeError
+		if !errors.As(err, &typeErr) {
+			return nil, err
+		}
+		debug.Log("stdin", "ignoring mistyped field: %v", err)
 	}
 	return &data, nil
 }
@@ -48,34 +67,6 @@ func (d *Data) TotalTokens() int {
 	}
 	u := d.ContextWindow.CurrentUsage
 	return u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
-}
-
-func (d *Data) ContextPercent() int {
-	if d.ContextWindow.UsedPercentage != nil {
-		return int(math.Round(*d.ContextWindow.UsedPercentage))
-	}
-	if d.ContextWindow.Size <= 0 {
-		return 0
-	}
-	pct := float64(d.TotalTokens()) / float64(d.ContextWindow.Size) * 100
-	return min(100, int(math.Round(pct)))
-}
-
-func (d *Data) BufferedPercent() int {
-	if d.ContextWindow.Size <= 0 {
-		return 0
-	}
-	total := float64(d.TotalTokens())
-	size := float64(d.ContextWindow.Size)
-	rawRatio := total / size
-
-	const low, high = 0.05, 0.50
-	scale := (rawRatio - low) / (high - low)
-	scale = max(0, min(1, scale))
-
-	buffer := size * autocompactBufferPercent * scale
-	pct := (total + buffer) / size * 100
-	return min(100, int(math.Round(pct)))
 }
 
 func (d *Data) TokenBreakdown() (input, cache int) {

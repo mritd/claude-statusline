@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/mritd/claude-statusline/internal/config"
 	"github.com/mritd/claude-statusline/internal/debug"
 )
 
@@ -26,8 +27,7 @@ func (m *EnvironmentModule) Collect(ctx *Context) error {
 	}
 	m.collected = true
 
-	home, _ := os.UserHomeDir()
-	claudeDir := filepath.Join(home, ".claude")
+	claudeDir := config.ClaudeDir()
 
 	for _, p := range []string{
 		filepath.Join(claudeDir, "CLAUDE.md"),

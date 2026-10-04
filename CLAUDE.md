@@ -26,8 +26,8 @@ The binary is invoked by Claude Code's `statusLine` hook. It receives a JSON blo
 | Package | Description |
 |---------|-------------|
 | ansi | ANSI color constants, helpers (`Colored`, `Dim`, `Yellow`), and color threshold functions (`ContextColor`, `QuotaColor`). Separate package to avoid render↔module import cycle |
-| stdin | Parses JSON input from Claude Code (model, context window, transcript path) |
-| config | Loads `~/.claude/plugins/claude-statusline/config.json`; auto-generates defaults on first run; provides per-module config and bar style resolution |
+| stdin | Parses JSON input from Claude Code (model, context window, rate limits, transcript path) |
+| config | Loads `$CLAUDE_CONFIG_DIR/plugins/claude-statusline/config.json` (default `~/.claude`); auto-generates defaults on first run; provides per-module config, bar style resolution, and `ClaudeDir`/`PluginDir` path helpers |
 | module | Pluggable module system. Each module implements `Module` interface (`Name`, `Collect`, `Vars`, `DefaultFormat`). Registry renders modules in config order |
 | render | Progress bar rendering via closure injection (`NewContextBar`/`NewQuotaBar`), format expansion (`{var}` substitution) |
 | transcript | Streams JSONL transcript file (with tail scan) to extract active tools and subagents |
@@ -39,7 +39,7 @@ The binary is invoked by Claude Code's `statusLine` hook. It receives a JSON blo
 | Module | Default | Data Source | Description |
 |--------|---------|-------------|-------------|
 | context | enabled | stdin JSON | Context window usage bar with status dot |
-| usage | enabled | Claude API + cache | 5h/7d API quota bars with caching |
+| usage | enabled | stdin `rate_limits`, API + cache fallback | 5h/7d quota bars |
 | git | enabled | git CLI | Branch, dirty, ahead/behind status |
 | tools | enabled | transcript JSONL | Per-turn tool calls with session history (top 6 by recency) |
 | agents | enabled | transcript JSONL | Subagent status tracking (latest 1 completed, running hides completed) |
@@ -55,7 +55,7 @@ The binary is invoked by Claude Code's `statusLine` hook. It receives a JSON blo
 
 ### Usage Module Caching
 
-The usage module fetches API quotas via HTTP and caches responses:
+The usage module prefers the `rate_limits` field on stdin (no I/O). Only when it is absent (before the first API response of a session, non-subscribers, or older Claude Code versions) does it fetch API quotas via HTTP and cache responses:
 
 - **Success TTL**: 300s (5 min), matches Anthropic usage API rate limit window
 - **Failure TTL**: 15s for non-429 errors, distinguished by `IsFailure` flag on cache entries

@@ -30,16 +30,16 @@ func (m *AgentsModule) Vars(ctx *Context) map[string]string {
 	for _, a := range m.agents {
 		name := agentDisplayName(a)
 		switch a.Status {
-		case "running":
+		case transcript.StatusRunning:
 			s := ctx.Config.Icon("running") + " " + name
 			if a.Model != "" {
 				s += fmt.Sprintf(" [%s]", a.Model)
 			}
 			runParts = append(runParts, ansi.Colored(ansi.CYAN, s+"..."))
-		case "completed":
+		case transcript.StatusCompleted:
 			elapsed := formatElapsed(a.EndTime.Sub(a.StartTime))
 			compParts = append(compParts, fmt.Sprintf("%s %s (%s)", ctx.Config.Icon("running"), name, elapsed))
-		case "error":
+		case transcript.StatusError:
 			elapsed := formatElapsed(a.EndTime.Sub(a.StartTime))
 			s := fmt.Sprintf("%s %s (%s)", ctx.Config.Icon("running"), name, elapsed)
 			compParts = append(compParts, ansi.Colored(ansi.RED, s))
@@ -59,18 +59,11 @@ func (m *AgentsModule) Vars(ctx *Context) map[string]string {
 
 	runStr := strings.Join(runParts, " | ")
 	compStr := strings.Join(compParts, " | ")
-	var summaryParts []string
-	if runStr != "" {
-		summaryParts = append(summaryParts, runStr)
-	}
-	if compStr != "" {
-		summaryParts = append(summaryParts, compStr)
-	}
 
 	return map[string]string{
 		"running":   runStr,
 		"completed": compStr,
-		"summary":   strings.Join(summaryParts, " | "),
+		"summary":   joinNonEmpty(" | ", runStr, compStr),
 	}
 }
 

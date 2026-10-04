@@ -37,3 +37,16 @@
 - **Issue**: Status line shows `()` when usage reset time has passed or is unavailable
 - **Root Cause**: Format string `({5h_reset})` outputs parentheses even when var is empty
 - **Solution**: Moved parentheses into the variable itself; empty reset time produces empty string
+
+### 2026-10-04 - Tool results reset the per-turn tool state
+
+- **Issue**: Completed/error highlighting only reflected the latest tool result batch (an earlier red ✗ disappeared after the next result). With tail scan active (transcript > `max_tail_size`), a still-running parallel tool was discarded as an orphan once a sibling tool finished.
+- **Root Cause**: Turn boundary was `type == "user"`, but Claude Code records `tool_result` blocks in `"user"` entries too, so every tool result started a "new turn" and moved `lastUserTS` forward.
+- **Solution**: `isUserPrompt` treats only non-`isMeta` user entries without `tool_result` blocks as turn boundaries.
+- **Prevention**: Tests use realistic transcript shapes (tool results inside `"user"` entries).
+
+### 2026-10-04 - Usage `bar_width` ignored, backoff checked after keychain read
+
+- **Issue**: `usage.bar_width` was documented but the bars were always 10 wide. When the 429 backoff gate was reached (no last good data, or `cache_ttl_seconds` shorter than the backoff), each refresh still spawned `/usr/bin/security`, and a keychain failure there overwrote the cache and cleared `RetryAfterUntil`.
+- **Root Cause**: Hardcoded `defaultBarSize`; backoff check came after `keychain.Read()`.
+- **Solution**: `NewUsageModule` takes the bar width; backoff is checked before the lock and the credential read.

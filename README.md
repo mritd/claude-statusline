@@ -101,14 +101,19 @@ All other settings (bar styles, icons, etc.) have built-in defaults and only nee
   //   context_limit: treat this token count as 100% (default: 250000).
   //                  When exceeded, {percent} shows actual usage (e.g. "300k").
   //                  Set to 0 to use the full context window size.
+  //                  To make 100% mean "about to auto-compact", set it to
+  //                  autoCompactWindow - 33000 (e.g. 567000 for 600000).
   "context": {
     "format": "{dot} Ctx {bar} {percent}",
     "bar_width": 10,
     "context_limit": 250000
   },
 
-  // API usage quotas. Variables: {plan} {5h_bar} {5h_pct} {5h_reset}
+  // Subscription usage quotas. Variables: {plan} {5h_bar} {5h_pct} {5h_reset}
   //   {7d_bar} {7d_pct} {7d_reset} {syncing} {api_error}
+  //   Read from the rate_limits Claude Code passes on stdin; falls back to
+  //   the usage API before the first response of a session. {plan} is only
+  //   filled on the API fallback path.
   //   cache_ttl_seconds: how long to cache successful API responses (default: 300)
   //   failure_cache_ttl_seconds: cache TTL for failed requests (default: 15)
   "usage": {
@@ -133,7 +138,7 @@ All other settings (bar styles, icons, etc.) have built-in defaults and only nee
     "format": "{summary}"
   },
 
-  // Model and project info (disabled by default). Variables: {model} {plan} {path}
+  // Model and project info (disabled by default). Variables: {model} {path}
   "project": {
     "format": "{model} {path}"
   },
@@ -187,7 +192,7 @@ Override any icon used in the statusline:
 | Module | Default | Description |
 |--------|---------|-------------|
 | `context` | enabled | Context window usage bar with status dot |
-| `usage` | enabled | 5h/7d API usage with reset times |
+| `usage` | enabled | 5h/7d subscription usage with reset times |
 | `git` | enabled | Branch name + dirty indicator |
 | `tools` | enabled | Session-wide tool call counts with per-turn highlighting |
 | `agents` | enabled | Subagent status (running/completed) |
@@ -224,7 +229,7 @@ Each module supports a `format` override using `{var}` template syntax:
 
 **agents**: `{running}` `{completed}` `{summary}`
 
-**project**: `{model}` `{plan}` `{path}`
+**project**: `{model}` `{path}`
 
 **environment**: `{claude_md}` `{rules}` `{mcps}` `{hooks}`
 
@@ -261,7 +266,7 @@ Accepts human-readable sizes: `"512KB"`, `"10MB"`, `"1GB"`. Set to `"0"` for ful
 
 ### Cache tuning
 
-Usage module caches API responses. Configurable per-module:
+The usage module reads quotas from stdin when Claude Code provides them. The API fallback caches its responses. Configurable per-module:
 
 ```json
 {
@@ -345,8 +350,8 @@ Debug output goes to stderr.
 
 ## Platform
 
-- **macOS**: Full support. OAuth token read from Keychain via `/usr/bin/security` CLI.
-- **Linux/Windows**: Builds with `CGO_ENABLED=0`. Token read from `~/.claude/.credentials.json`.
+- **macOS**: Full support. Usage API fallback reads the OAuth token from Keychain via `/usr/bin/security` CLI.
+- **Linux/Windows**: Builds with `CGO_ENABLED=0`. Usage API fallback reads the token from `~/.claude/.credentials.json` (or `$CLAUDE_CONFIG_DIR`).
 
 ## Credits
 

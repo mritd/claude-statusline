@@ -233,6 +233,55 @@ func TestTailScanDiscardsOrphanRunningTools(t *testing.T) {
 	}
 }
 
+func TestToolResultEntriesDoNotStartTurn(t *testing.T) {
+	// Real transcripts record tool results as "user" entries. They must not
+	// reset the turn: an error earlier in the turn stays visible after later
+	// results arrive.
+	jsonl := `{"timestamp":"2025-03-19T12:00:00Z","type":"user","message":{"role":"user","content":"fix the build"}}
+{"timestamp":"2025-03-19T12:00:01Z","type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"go build"}}]}}
+{"timestamp":"2025-03-19T12:00:02Z","type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","is_error":true}]}}
+{"timestamp":"2025-03-19T12:00:03Z","type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":"/tmp/a.go"}}]}}
+{"timestamp":"2025-03-19T12:00:04Z","type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2"}]}}
+{"timestamp":"2025-03-19T12:00:05Z","type":"user","isMeta":true,"message":{"role":"user","content":[{"type":"text","text":"skill body"}]}}
+`
+	path := writeTempJSONL(t, jsonl)
+	data, err := Parse(path, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data.Tools) != 2 {
+		t.Fatalf("expected both tools in the turn, got %+v", data.Tools)
+	}
+	if data.Tools[0].Name != "Bash" || data.Tools[0].Status != StatusError {
+		t.Fatalf("expected errored Bash kept, got %+v", data.Tools[0])
+	}
+	if data.Tools[1].Name != "Read" || data.Tools[1].Status != StatusCompleted {
+		t.Fatalf("expected completed Read, got %+v", data.Tools[1])
+	}
+}
+
+func TestTailScanKeepsParallelRunningTools(t *testing.T) {
+	// Two parallel tools: Read finishes first, Bash is still running. The
+	// Read result entry must not make the running Bash look like an orphan.
+	padding := ""
+	for len(padding) < 2048 {
+		padding += `{"timestamp":"2024-12-31T00:00:00Z","type":"progress"}` + "\n"
+	}
+	turn := `{"timestamp":"2025-01-01T00:00:00Z","type":"user","message":{"role":"user","content":"go"}}
+{"timestamp":"2025-01-01T00:00:01Z","type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"sleep 60"}}]}}
+{"timestamp":"2025-01-01T00:00:01Z","type":"assistant","message":{"content":[{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":"/tmp/a.go"}}]}}
+{"timestamp":"2025-01-01T00:00:02Z","type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2"}]}}
+`
+	path := writeTempJSONL(t, padding+turn)
+	data, _ := Parse(path, 1024)
+	if len(data.Tools) != 2 {
+		t.Fatalf("expected running Bash and completed Read, got %+v", data.Tools)
+	}
+	if data.Tools[0].Name != "Bash" || data.Tools[0].Status != StatusRunning {
+		t.Fatalf("expected running Bash kept, got %+v", data.Tools[0])
+	}
+}
+
 func writeTempJSONL(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "transcript.jsonl")

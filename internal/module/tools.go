@@ -34,11 +34,11 @@ func (m *ToolsModule) Vars(ctx *Context) map[string]string {
 	errCounts := make(map[string]int)
 	for i := range m.tools {
 		switch m.tools[i].Status {
-		case "running":
+		case transcript.StatusRunning:
 			running = append(running, m.tools[i])
-		case "completed":
+		case transcript.StatusCompleted:
 			compCounts[m.tools[i].Name]++
-		case "error":
+		case transcript.StatusError:
 			errCounts[m.tools[i].Name]++
 		}
 	}
@@ -97,22 +97,12 @@ func (m *ToolsModule) Vars(ctx *Context) map[string]string {
 	runStr := strings.Join(runParts, " | ")
 	compStr := strings.Join(compParts, " | ")
 	errStr := strings.Join(errParts, " | ")
-	var summaryParts []string
-	if runStr != "" {
-		summaryParts = append(summaryParts, runStr)
-	}
-	if compStr != "" {
-		summaryParts = append(summaryParts, compStr)
-	}
-	if errStr != "" {
-		summaryParts = append(summaryParts, errStr)
-	}
 
 	return map[string]string{
 		"running":   runStr,
 		"completed": compStr,
 		"errors":    errStr,
-		"summary":   strings.Join(summaryParts, " | "),
+		"summary":   joinNonEmpty(" | ", runStr, compStr, errStr),
 	}
 }
 

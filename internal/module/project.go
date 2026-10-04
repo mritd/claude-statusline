@@ -24,11 +24,10 @@ func (m *ProjectModule) Vars(ctx *Context) map[string]string {
 	}
 	return map[string]string{
 		"model": model,
-		"plan":  "",
 		"path":  path,
 	}
 }
 
 func (m *ProjectModule) DefaultFormat() string {
-	return "[{model} | {plan}] {path}"
+	return "[{model}] {path}"
 }

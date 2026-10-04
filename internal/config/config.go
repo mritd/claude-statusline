@@ -2,6 +2,8 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,14 +14,15 @@ import (
 )
 
 type Config struct {
-	Modules     []string                   `json:"modules"`
-	Separator   string                     `json:"separator"`
-	Newline     []string                   `json:"newline"`
-	BarStyle    string                     `json:"bar_style"`
-	BarStyles   map[string][2]string       `json:"bar_styles"`
-	Icons       map[string]string          `json:"icons"`
-	MaxTailSize string                     `json:"max_tail_size"`
-	Raw         map[string]json.RawMessage `json:"-"`
+	Modules     []string             `json:"modules"`
+	Separator   string               `json:"separator"`
+	Newline     []string             `json:"newline"`
+	BarStyle    string               `json:"bar_style"`
+	BarStyles   map[string][2]string `json:"-"` // merged from "bar_styles" in Load
+	Icons       map[string]string    `json:"-"` // merged from "icons" in Load
+	MaxTailSize string               `json:"max_tail_size"`
+
+	moduleConfs map[string]ModuleConf // per-module sections, parsed once in Load
 }
 
 type ModuleConf struct {
@@ -59,20 +62,29 @@ func Default() *Config {
 		Separator:   " | ",
 		Newline:     []string{"tools", "agents", "environment"},
 		BarStyle:    "diamond",
-		BarStyles:   defaultBarStyles,
-		Icons:       defaultIcons,
+		BarStyles:   maps.Clone(defaultBarStyles),
+		Icons:       maps.Clone(defaultIcons),
 		MaxTailSize: DefaultMaxTailSize,
-		Raw:         make(map[string]json.RawMessage),
 	}
 }
 
-func DefaultPath() string {
-	configDir := os.Getenv("CLAUDE_CONFIG_DIR")
-	if configDir == "" {
-		home, _ := os.UserHomeDir()
-		configDir = filepath.Join(home, ".claude")
+// ClaudeDir returns the Claude Code config directory: $CLAUDE_CONFIG_DIR,
+// or ~/.claude when unset.
+func ClaudeDir() string {
+	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+		return dir
 	}
-	return filepath.Join(configDir, "plugins", "claude-statusline", "config.json")
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".claude")
+}
+
+// PluginDir returns the directory holding this plugin's config and cache.
+func PluginDir() string {
+	return filepath.Join(ClaudeDir(), "plugins", "claude-statusline")
+}
+
+func DefaultPath() string {
+	return filepath.Join(PluginDir(), "config.json")
 }
 
 func Load(path string) *Config {
@@ -87,48 +99,41 @@ func Load(path string) *Config {
 		return cfg
 	}
 
+	// Top-level fields overlay the defaults. A mistyped field is skipped and
+	// the rest still apply; malformed JSON falls back to defaults.
+	if err := json.Unmarshal(data, cfg); err != nil {
+		var typeErr *json.UnmarshalTypeError
+		if !errors.As(err, &typeErr) {
+			debug.Log("config", "parse failed (using defaults): %v", err)
+			return Default()
+		}
+		debug.Log("config", "ignoring mistyped field: %v", err)
+	}
+	if cfg.MaxTailSize == "" {
+		cfg.MaxTailSize = DefaultMaxTailSize
+	}
+
 	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		debug.Log("config", "parse failed (using defaults): %v", err)
-		return cfg
+	_ = json.Unmarshal(data, &raw)
+
+	// bar_styles and icons merge key by key; a map with any bad value is
+	// ignored as a whole so defaults are never replaced by zero values.
+	var styles map[string][2]string
+	if v, ok := raw["bar_styles"]; ok && json.Unmarshal(v, &styles) == nil {
+		maps.Copy(cfg.BarStyles, styles)
+	}
+	var icons map[string]string
+	if v, ok := raw["icons"]; ok && json.Unmarshal(v, &icons) == nil {
+		maps.Copy(cfg.Icons, icons)
 	}
 
-	if v, ok := raw["modules"]; ok {
-		_ = json.Unmarshal(v, &cfg.Modules)
+	// Module sections keep whatever decoded; a mistyped field stays zero.
+	cfg.moduleConfs = make(map[string]ModuleConf, len(raw))
+	for name, v := range raw {
+		var mc ModuleConf
+		_ = json.Unmarshal(v, &mc)
+		cfg.moduleConfs[name] = mc
 	}
-	if v, ok := raw["separator"]; ok {
-		_ = json.Unmarshal(v, &cfg.Separator)
-	}
-	if v, ok := raw["newline"]; ok {
-		_ = json.Unmarshal(v, &cfg.Newline)
-	}
-	if v, ok := raw["bar_style"]; ok {
-		_ = json.Unmarshal(v, &cfg.BarStyle)
-	}
-	if v, ok := raw["bar_styles"]; ok {
-		var custom map[string][2]string
-		if json.Unmarshal(v, &custom) == nil {
-			for k, v := range custom {
-				cfg.BarStyles[k] = v
-			}
-		}
-	}
-	if v, ok := raw["icons"]; ok {
-		var custom map[string]string
-		if json.Unmarshal(v, &custom) == nil {
-			for k, v := range custom {
-				cfg.Icons[k] = v
-			}
-		}
-	}
-	if v, ok := raw["max_tail_size"]; ok {
-		var s string
-		if json.Unmarshal(v, &s) == nil && s != "" {
-			cfg.MaxTailSize = s
-		}
-	}
-
-	cfg.Raw = raw
 	return cfg
 }
 
@@ -193,12 +198,10 @@ func ParseSize(s string) int64 {
 	return int64(n * float64(multiplier))
 }
 
+// ModuleConfig returns the per-module section for name, or the zero value
+// when the config file has none.
 func (c *Config) ModuleConfig(name string) ModuleConf {
-	var mc ModuleConf
-	if v, ok := c.Raw[name]; ok {
-		_ = json.Unmarshal(v, &mc)
-	}
-	return mc
+	return c.moduleConfs[name]
 }
 
 func (c *Config) IsEnabled(name string) bool {
